@@ -117,7 +117,7 @@ def replicate(source, destination, pending, fixes):
                 "sort": []
             })
 
-            destination.extend([{"_id": h._id, "value": fixer(h._source)} for h in data.hits.hits])
+            destination.extend([{"id": h._id, "value": fixer(h._source)} for h in data.hits.hits])
 
 
 def main(settings):
