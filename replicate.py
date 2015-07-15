@@ -8,20 +8,18 @@
 # Author: Kyle Lahnakoski (kyle@lahnakoski.com)
 #
 
+from datetime import timedelta, datetime
 
-from datetime import datetime, timedelta
-from pyLibrary.collections import MIN
-from pyLibrary.struct import nvl, Struct
-from pyLibrary.thread.threads import ThreadedQueue
-from pyLibrary.times.timer import Timer
-import transform_bugzilla
-from pyLibrary.cnv import CNV
-from pyLibrary.env.logs import Log
-from pyLibrary.queries import Q
-from pyLibrary.env import startup
+from pyLibrary import convert
+from pyLibrary.collections import MAX
+from pyLibrary.debugs import startup, constants
+from pyLibrary.debugs.logs import Log
+from pyLibrary.env import elasticsearch
 from pyLibrary.env.files import File
-from pyLibrary.collections.multiset import Multiset
-from pyLibrary.env.elasticsearch import ElasticSearch
+from pyLibrary.queries import qb
+from pyLibrary.thread.threads import Queue, Thread
+
+
 
 
 # REPLICATION
@@ -30,221 +28,121 @@ from pyLibrary.env.elasticsearch import ElasticSearch
 # 1) The slave can have scripting enabled, allowing more powerful set of queries
 # 2) Physical proximity increases the probability of reduced latency
 # 3) The slave can be configured with better hardware
-# 4) The slave's exclusivity increases availability (Mozilla's public cluster my have time of high load)
-
+# 4) The slave's exclusivity increases availability (Mozilla's public cluster may have time of high load)
+from pyLibrary.times.dates import Date
+from pyLibrary.times.timer import Timer
 
 far_back = datetime.utcnow() - timedelta(weeks=52)
 BATCH_SIZE = 1000
 
 
-def extract_from_file(source_settings, destination):
-    file = File(source_settings.filename)
-    for g, d in Q.groupby(file, size=BATCH_SIZE):
-        try:
-            d2 = map(
-                lambda (x): {"id": x.id, "value": x},
-                map(
-                    lambda(x): transform_bugzilla.normalize(CNV.JSON2object(x)),
-                    d
-                )
-            )
-            Log.note("add {{num}} records", {"num":len(d2)})
-            destination.extend(d2)
-        except Exception, e:
-            filename = "Error_" + unicode(g) + ".txt"
-            File(filename).write(d)
-            Log.warning("Can not convert block {{block}} (file={{host}})", {
-                "block": g,
-                "filename": filename
-            }, e)
-
-
-def get_last_updated(es):
-
-    if not isinstance(es, ElasticSearch):
-        return CNV.milli2datetime(0)
-
+def get_last_updated(es, primary_field):
     try:
         results = es.search({
-            "query": {"filtered": {
-                "query": {"match_all": {}},
-                "filter": {
-                    "range": {
-                    "modified_ts": {"gte": CNV.datetime2milli(far_back)}}}
-            }},
+            "query": {"match_all": {}},
             "from": 0,
             "size": 0,
-            "sort": [],
-            "facets": {"modified_ts": {"statistical": {"field": "modified_ts"}}}
+            "facets": {"last_time": {"statistical": {"field": primary_field}}}
         })
 
-        if results.facets.modified_ts.count == 0:
-            return CNV.milli2datetime(0)
-        return CNV.milli2datetime(results.facets.modified_ts.max)
+        if results.facets.last_time.count==0:
+            return Date.MIN
+        return Date(results.facets.last_time.max)
     except Exception, e:
-        Log.error("Can not get_last_updated from {{host}}/{{index}}",{
+        Log.error("Can not get_last_updated from {{host}}/{{index}}", {
             "host": es.settings.host,
             "index": es.settings.index
         }, e)
 
 
-def get_pending(es, since):
-    result = es.search({
-        "query": {"match_all": {}},
-        "from": 0,
-        "size": 0,
-        "sort": [],
-        "facets": {"default": {"statistical": {"field": "bug_id"}}}
-    })
+def get_pending(es, since, primary_key):
+    pending_bugs = Queue("pending ids")
 
-    max_bug = int(result.facets.default.max)
+    def filler(please_stop, since):
+        while not please_stop:
+            result = es.search({
+                "query": {"filtered": {
+                    "query": {"match_all": {}},
+                    "filter": {"range": {primary_key: {"gte": since}}},
+                }},
+                "fields": ["_id", primary_key],
+                "from": 0,
+                "size": BATCH_SIZE,
+                "sort": [primary_key]
+            })
 
+            try:
+                since = MAX([float(h.fields[primary_key]) for h in result.hits.hits])
+            except Exception:
+                since = MAX([h.fields[primary_key] for h in result.hits.hits])
 
-    pending_bugs = None
+            ids = result.hits.hits._id
+            Log.note("Adding {{num}} to pending queue", num=len(ids))
+            pending_bugs.extend(ids)
 
-    for s, e in Q.intervals(0, max_bug+1, 100000):
-        Log.note("Collect history for bugs from {{start}}..{{end}}", {"start":s, "end":e})
-        result = es.search({
-            "query": {"filtered": {
-                "query": {"match_all": {}},
-                "filter": {"and":[
-                    {"range": {"modified_ts": {"gte": CNV.datetime2milli(since)}}},
-                    {"range": {"bug_id": {"gte": s, "lte": e}}}
-                ]}
-            }},
-            "from": 0,
-            "size": 0,
-            "sort": [],
-            "facets": {"default": {"terms": {"field": "bug_id", "size": 200000}}}
-        })
+            if len(result.hits.hits) < BATCH_SIZE:
+                break
 
-        temp = Multiset(
-            result.facets.default.terms,
-            key_field="term",
-            count_field="count"
-        )
+        Log.note("Source has {{num}} bug versions for updating", num=len(pending_bugs))
 
-        if pending_bugs is None:
-            pending_bugs = temp
-        else:
-            pending_bugs = pending_bugs + temp
+    Thread.run("get pending", target=filler, since=since)
 
-
-
-    Log.note("Source has {{num}} bug versions for updating", {
-        "num": len(pending_bugs)
-    })
     return pending_bugs
 
 
-# USE THE source TO GET THE INDEX SCHEMA
-def get_or_create_index(destination_settings, source):
-    #CHECK IF INDEX, OR ALIAS, EXISTS
-    es = ElasticSearch(destination_settings)
-    aliases = es.get_aliases()
-
-    indexes = [a for a in aliases if a.alias == destination_settings.index or a.index == destination_settings.index]
-    if not indexes:
-        #CREATE INDEX
-        schema = CNV.JSON2object(File(destination_settings.schema_file).read(), paths=True)
-        assert schema.settings
-        assert schema.mappings
-        ElasticSearch.create_index(destination_settings, schema, limit_replicas=True)
-    elif len(indexes) > 1:
-        Log.error("do not know how to replicate to more than one index")
-    elif indexes[0].alias != None:
-        destination_settings.alias = indexes[0].alias
-        destination_settings.index = indexes[0].index
-
-    return ElasticSearch(destination_settings)
-
-
-def replicate(source, destination, pending, last_updated):
+def replicate(source, destination, pending, fixes):
     """
     COPY source RECORDS TO destination
     """
-    for g, bugs in Q.groupby(pending, max_size=BATCH_SIZE):
-        with Timer("Replicate {{num_bugs}} bug versions", {"num_bugs": len(bugs)}):
+
+    def fixer(_source):
+        for k, v in _source.items():
+            locals()[k] = v
+
+        for k, f in fixes.items():
+            _source[k] = eval(f)
+
+        return _source
+
+
+    for g, docs in qb.groupby(pending, max_size=BATCH_SIZE):
+        with Timer("Replicate {{num_docs}} bug versions", {"num_docs": len(docs)}):
             data = source.search({
                 "query": {"filtered": {
                     "query": {"match_all": {}},
-                    "filter": {"and": [
-                        {"terms": {"bug_id": set(bugs)}},
-                        {"range": {"expires_on":
-                            {"gte": CNV.datetime2milli(last_updated)}
-                        }}
-                    ]}
+                    "filter": {"terms": {"_id": set(docs)}}
                 }},
                 "from": 0,
                 "size": 200000,
                 "sort": []
             })
 
-            d2 = map(
-                lambda(x): {"id": x.id, "value": x},
-                map(
-                    lambda(x): transform_bugzilla.normalize(transform_bugzilla.rename_attachments(x._source), old_school=True),
-                    data.hits.hits
-                )
-            )
-            destination.extend(d2)
+            destination.extend([{"_id": h._id, "value": fixer(h._source)} for h in data.hits.hits])
 
 
 def main(settings):
-    current_time = datetime.utcnow()
-    time_file = File(settings.param.last_replication_time)
+    current_time = Date.now()
+    time_file = File(settings.last_replication_time)
 
-    #USE A SOURCE FILE
-    if settings.source.filename != None:
-        settings.destination.alias = settings.destination.index
-        settings.destination.index = ElasticSearch.proto_name(settings.destination.alias)
-        schema = CNV.JSON2object(File(settings.destination.schema_file).read(), paths=True, flexible=True)
-        if transform_bugzilla.USE_ATTACHMENTS_DOT:
-            schema = CNV.JSON2object(CNV.object2JSON(schema).replace("attachments_", "attachments."))
+    # SYNCH WITH source ES INDEX
+    source = elasticsearch.Index(settings.source)
+    destination = elasticsearch.Cluster(settings.destination).get_or_create_index(settings.destination)
 
-        dest = ElasticSearch.create_index(settings.destination, schema, limit_replicas=True)
-        dest.set_refresh_interval(-1)
-        extract_from_file(settings.source, dest)
-        dest.set_refresh_interval(1)
+    # GET LAST UPDATED
+    last_updated = get_last_updated(destination, settings.primary_field)
+    Log.note("updating records with {{primary_field}}>={{last_updated}}", last_updated=last_updated, primary_field=settings.primary_field)
 
-        dest.delete_all_but(settings.destination.alias, settings.destination.index)
-        dest.add_alias(settings.destination.alias)
-
-    else:
-        # SYNCH WITH source ES INDEX
-        source=ElasticSearch(settings.source)
-
-
-        # USE A DESTINATION FILE
-        if settings.destination.filename:
-            Log.note("Sending records to file: {{filename}}", {"filename":settings.destination.filename})
-            file = File(settings.destination.filename)
-            destination = Struct(
-                extend=lambda x: file.extend([CNV.object2JSON(v["value"]) for v in x]),
-                file=file
-            )
-        else:
-            destination=get_or_create_index(settings["destination"], source)
-
-        # GET LAST UPDATED
-        from_file = None
-        if time_file.exists:
-            from_file = CNV.milli2datetime(CNV.value2int(time_file.read()))
-        from_es = get_last_updated(destination) - timedelta(hours=1)
-        last_updated = MIN(nvl(from_file, CNV.milli2datetime(0)), from_es)
-        Log.note("updating records with modified_ts>={{last_updated}}", {"last_updated":last_updated})
-
-        pending = get_pending(source, last_updated)
-        with ThreadedQueue(destination, size=1000) as data_sink:
-            replicate(source, data_sink, pending, last_updated)
+    pending = get_pending(source, last_updated, settings.primary_field)
+    replicate(source, destination, pending, settings.fix)
 
     # RECORD LAST UPDATED
-    time_file.write(unicode(CNV.datetime2milli(current_time)))
+    time_file.write(unicode(convert.datetime2milli(current_time)))
 
 
 def start():
     try:
-        settings=startup.read_settings()
+        settings = startup.read_settings()
+        constants.set(settings.constants)
         Log.start(settings.debug)
         main(settings)
     except Exception, e:
@@ -253,5 +151,5 @@ def start():
         Log.stop()
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     start()

@@ -1,6 +1,12 @@
 {
 	"primary_field": "timestamp",
 	"last_replication_time": "./results/data/orange_factor_last_replication_time.txt",
+	"fix":{
+		"bug":"int(bug)",
+		"starttime":"float(starttime)",
+		"timestamp":"float(timestamp)",
+		"date":"Date(date).unix"
+	},
 	"source": {
 		"host": "http://of-elasticsearch-zlb.webapp.scl3.mozilla.com",
 		"port": 9200,
@@ -11,14 +17,21 @@
 //		"host": "http://54.149.35.214",
 		"host": "http://localhost",
 		"port": 9200,
-		"index": "orange-factor",
+		"index": "orange_factor",
 		"type": "bug_info",
 		"timeout": 300,
 		"schema": {
 			"$ref": "//../schema/orange_factor.json"
 		},
 		"debug": true,
-		"limit_replicas": false
+		"limit_replicas": false,
+		"zip": false
+	},
+	"constants": {
+		"pyLibrary.env.http.default_headers": {
+			"From": "https://wiki.mozilla.org/Auto-tools/Projects/OrangeFactor#ActiveData"
+		},
+		"pyLibrary.env.http.USE_COMPRESSION": false
 	},
 	"debug": {
 		"log": [
@@ -28,6 +41,4 @@
 			}
 		]
 	}
-
-
 }

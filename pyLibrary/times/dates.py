@@ -34,7 +34,7 @@ ISO8601 = '%Y-%m-%dT%H:%M:%SZ'
 
 
 class Date(object):
-
+    EPOCH = None
     MIN = None
     MAX = None
 
@@ -262,7 +262,7 @@ else:
 
 
 
-
+Date.EPOCH = Date(datetime(1970, 1, 1))
 Date.MIN = Date(datetime(1, 1, 1))
 Date.MAX = Date(datetime(2286, 11, 20, 17, 46, 39))
 

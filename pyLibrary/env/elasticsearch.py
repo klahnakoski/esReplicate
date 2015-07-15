@@ -597,9 +597,12 @@ class Cluster(object):
                 suggestion = ""
 
             if kwargs.get("data"):
-                Log.error("Problem with call to {{url}}" + suggestion + "\n{{body|left(10000)}}",
+                Log.error(
+                    "Problem with call to {{url}}" + suggestion + "\n{{body|left(10000)}}",
                     url=url,
-                    body=kwargs["data"][0:10000] if self.debug else kwargs["data"][0:100], cause=e)
+                    body=kwargs["data"][0:10000] if self.debug else kwargs["data"][0:100],
+                    cause=e
+                )
             else:
                 Log.error("Problem with call to {{url}}" + suggestion, url=url, cause=e)
 

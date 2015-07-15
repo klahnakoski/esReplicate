@@ -33,6 +33,8 @@ from pyLibrary.env.big_data import safe_size, CompressedLines, ZipfileLines
 
 FILE_SIZE_LIMIT = 100 * 1024 * 1024
 MIN_READ_SIZE = 8 * 1024
+USE_COMPRESSION = True
+
 default_headers = Dict()  # TODO: MAKE THIS VARIABLE A SPECIAL TYPE OF EXPECTED MODULE PARAMETER SO IT COMPLAINS IF NOT SET
 default_timeout = 600
 
@@ -83,7 +85,7 @@ def request(method, url, **kwargs):
     timeout = kwargs[b'timeout'] = coalesce(kwargs.get(b'timeout'), default_timeout)
 
     try:
-        if len(coalesce(kwargs.get(b"data"))) > 1000:
+        if USE_COMPRESSION and coalesce(kwargs.get(b"data")) > 1000:
             compressed = convert.bytes2zip(kwargs[b"data"])
             if b"headers" not in kwargs:
                 kwargs[b"headers"] = {}
