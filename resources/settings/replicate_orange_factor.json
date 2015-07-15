@@ -14,8 +14,8 @@
 		"type": "bug_info"
 	},
 	"destination": {
-//		"host": "http://54.149.35.214",
-		"host": "http://localhost",
+		"host": "http://54.149.35.214",
+//		"host": "http://localhost",
 		"port": 9200,
 		"index": "orange_factor",
 		"type": "bug_info",
