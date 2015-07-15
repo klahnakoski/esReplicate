@@ -1,0 +1,68 @@
+{
+	"settings": {
+		"index.number_of_replicas": 0,
+		"index.number_of_shards": 5
+	},
+    "mappings": {
+        "bug_info": {
+            "properties": {
+                "os": {
+	                "index": "not_analyzed",
+                    "type": "string"
+                },
+                "machinename": {
+	                "index": "not_analyzed",
+                    "type": "string"
+                },
+                "rev": {
+	                "index": "not_analyzed",
+                    "type": "string"
+                },
+                "starttime": {
+	                "index": "not_analyzed",
+                    "type": "long"
+                },
+                "buildtype": {
+	                "index": "not_analyzed",
+                    "type": "string"
+                },
+                "type": {
+	                "index": "not_analyzed",
+                    "type": "string"
+                },
+                "date": {
+                    "format": "dateOptionalTime",
+                    "type": "date"
+                },
+                "who": {
+	                "index": "not_analyzed",
+                    "type": "string"
+                },
+                "timestamp": {
+	                "index": "not_analyzed",
+                    "type": "long"
+                },
+                "tree": {
+	                "index": "not_analyzed",
+                    "type": "string"
+                },
+                "treeherder_job_id": {
+	                "index": "not_analyzed",
+                    "type": "long"
+                },
+                "bug": {
+	                "index": "not_analyzed",
+                    "type": "string"
+                },
+                "buildname": {
+	                "index": "not_analyzed",
+                    "type": "string"
+                },
+                "logfile": {
+	                "index": "not_analyzed",
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

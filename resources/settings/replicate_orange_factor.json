@@ -1,0 +1,33 @@
+{
+	"primary_field": "timestamp",
+	"last_replication_time": "./results/data/orange_factor_last_replication_time.txt",
+	"source": {
+		"host": "http://of-elasticsearch-zlb.webapp.scl3.mozilla.com",
+		"port": 9200,
+		"index": "bugs",
+		"type": "bug_info"
+	},
+	"destination": {
+//		"host": "http://54.149.35.214",
+		"host": "http://localhost",
+		"port": 9200,
+		"index": "orange-factor",
+		"type": "bug_info",
+		"timeout": 300,
+		"schema": {
+			"$ref": "//../schema/orange_factor.json"
+		},
+		"debug": true,
+		"limit_replicas": false
+	},
+	"debug": {
+		"log": [
+			{
+				"log_type": "stream",
+				"stream": "sys.stdout"
+			}
+		]
+	}
+
+
+}
