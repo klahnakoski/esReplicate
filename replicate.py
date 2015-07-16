@@ -45,7 +45,7 @@ def get_last_updated(es, primary_field):
             "facets": {"last_time": {"statistical": {"field": primary_field}}}
         })
 
-        if results.facets.last_time.count==0:
+        if results.facets.last_time.count == 0:
             return Date.MIN
         return Date(results.facets.last_time.max)
     except Exception, e:
@@ -58,12 +58,12 @@ def get_last_updated(es, primary_field):
 def get_pending(es, since, primary_key):
     pending_bugs = Queue("pending ids")
 
-    def filler(please_stop, since):
+    def filler(please_stop, max_time):
         while not please_stop:
             result = es.search({
                 "query": {"filtered": {
                     "query": {"match_all": {}},
-                    "filter": {"range": {primary_key: {"gte": since}}},
+                    "filter": {"range": {primary_key: {"gte": max_time}}},
                 }},
                 "fields": ["_id", primary_key],
                 "from": 0,
@@ -71,10 +71,10 @@ def get_pending(es, since, primary_key):
                 "sort": [primary_key]
             })
 
-            try:
-                since = MAX([float(h.fields[primary_key]) for h in result.hits.hits])
-            except Exception:
-                since = MAX([h.fields[primary_key] for h in result.hits.hits])
+            # try:
+            #     max_time = MAX([float(h.fields[primary_key]) for h in result.hits.hits])
+            # except Exception:
+            max_time = MAX([h.fields[primary_key] for h in result.hits.hits])
 
             ids = result.hits.hits._id
             Log.note("Adding {{num}} to pending queue", num=len(ids))
@@ -85,7 +85,7 @@ def get_pending(es, since, primary_key):
 
         Log.note("Source has {{num}} bug versions for updating", num=len(pending_bugs))
 
-    Thread.run("get pending", target=filler, since=since)
+    Thread.run("get pending", target=filler, max_time=since)
 
     return pending_bugs
 

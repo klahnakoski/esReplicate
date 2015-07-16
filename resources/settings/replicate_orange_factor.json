@@ -11,11 +11,12 @@
 		"host": "http://of-elasticsearch-zlb.webapp.scl3.mozilla.com",
 		"port": 9200,
 		"index": "bugs",
-		"type": "bug_info"
+		"type": "bug_info",
+		"debug": false
 	},
 	"destination": {
-		"host": "http://54.149.35.214",
-//		"host": "http://localhost",
+//		"host": "http://54.149.35.214",
+		"host": "http://localhost",
 		"port": 9200,
 		"index": "orange_factor",
 		"type": "bug_info",
