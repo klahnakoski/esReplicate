@@ -47,7 +47,7 @@ def get_last_updated(es, primary_field):
 
         if results.facets.last_time.count == 0:
             return Date.MIN
-        return Date(results.facets.last_time.max)
+        return results.facets.last_time.max
     except Exception, e:
         Log.error("Can not get_last_updated from {{host}}/{{index}}", {
             "host": es.settings.host,
@@ -58,12 +58,13 @@ def get_last_updated(es, primary_field):
 def get_pending(es, since, primary_key):
     pending_bugs = Queue("pending ids")
 
-    def filler(please_stop, max_time):
+    def filler(please_stop, max_value):
         while not please_stop:
+            Log.note("Get records with {{primary_key}} >= {{max_time|datetime}}", primary_key=primary_key, max_time=max_value)
             result = es.search({
                 "query": {"filtered": {
                     "query": {"match_all": {}},
-                    "filter": {"range": {primary_key: {"gte": max_time}}},
+                    "filter": {"range": {primary_key: {"gte": unicode(max_value)}}},
                 }},
                 "fields": ["_id", primary_key],
                 "from": 0,
@@ -74,18 +75,19 @@ def get_pending(es, since, primary_key):
             # try:
             #     max_time = MAX([float(h.fields[primary_key]) for h in result.hits.hits])
             # except Exception:
-            max_time = MAX([h.fields[primary_key] for h in result.hits.hits])
+            max_value = MAX([h.fields[primary_key] for h in result.hits.hits])
 
             ids = result.hits.hits._id
             Log.note("Adding {{num}} to pending queue", num=len(ids))
             pending_bugs.extend(ids)
 
             if len(result.hits.hits) < BATCH_SIZE:
+                pending_bugs.add(Thread.STOP)
                 break
 
         Log.note("Source has {{num}} bug versions for updating", num=len(pending_bugs))
 
-    Thread.run("get pending", target=filler, max_time=since)
+    Thread.run("get pending", target=filler, max_value=since)
 
     return pending_bugs
 
@@ -136,7 +138,7 @@ def main(settings):
     replicate(source, destination, pending, settings.fix)
 
     # RECORD LAST UPDATED
-    time_file.write(unicode(convert.datetime2milli(current_time)))
+    time_file.write(unicode(current_time.milli))
 
 
 def start():
