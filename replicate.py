@@ -10,7 +10,6 @@
 
 from datetime import timedelta, datetime
 
-from pyLibrary import convert
 from pyLibrary.collections import MAX
 from pyLibrary.debugs import startup, constants
 from pyLibrary.debugs.logs import Log
@@ -49,10 +48,11 @@ def get_last_updated(es, primary_field):
             return Date.MIN
         return results.facets.last_time.max
     except Exception, e:
-        Log.error("Can not get_last_updated from {{host}}/{{index}}", {
+        Log.warning("Can not get_last_updated from {{host}}/{{index}}", {
             "host": es.settings.host,
             "index": es.settings.index
         }, e)
+        return None
 
 
 def get_pending(es, since, primary_key):
@@ -60,21 +60,28 @@ def get_pending(es, since, primary_key):
 
     def filler(please_stop, max_value):
         while not please_stop:
-            Log.note("Get records with {{primary_key}} >= {{max_time|datetime}}", primary_key=primary_key, max_time=max_value)
-            result = es.search({
-                "query": {"filtered": {
+            if max_value == None:
+                Log.note("Get all records")
+                result = es.search({
                     "query": {"match_all": {}},
-                    "filter": {"range": {primary_key: {"gte": unicode(max_value)}}},
-                }},
-                "fields": ["_id", primary_key],
-                "from": 0,
-                "size": BATCH_SIZE,
-                "sort": [primary_key]
-            })
+                    "fields": ["_id", primary_key],
+                    "from": 0,
+                    "size": BATCH_SIZE,
+                    "sort": [primary_key]
+                })
+            else:
+                Log.note("Get records with {{primary_key}} >= {{max_time|datetime}}", primary_key=primary_key, max_time=max_value)
+                result = es.search({
+                    "query": {"filtered": {
+                        "query": {"match_all": {}},
+                        "filter": {"range": {primary_key: {"gte": unicode(max_value)}}},
+                    }},
+                    "fields": ["_id", primary_key],
+                    "from": 0,
+                    "size": BATCH_SIZE,
+                    "sort": [primary_key]
+                })
 
-            # try:
-            #     max_time = MAX([float(h.fields[primary_key]) for h in result.hits.hits])
-            # except Exception:
             max_value = MAX([h.fields[primary_key] for h in result.hits.hits])
 
             ids = result.hits.hits._id

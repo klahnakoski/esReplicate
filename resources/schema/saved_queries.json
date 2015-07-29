@@ -1,0 +1,54 @@
+{
+	"settings": {
+		"index.number_of_shards": 3,
+		"index.number_of_replicas": 2,
+		"index.store.throttle.type": "merge",
+		"index.cache.filter.expire": "1m",
+		"index.cache.field.type": "soft"
+	},
+	"mappings": {
+		"_default_": {
+			"dynamic_templates": [
+				{
+					"values_strings": {
+						"match": "*",
+						"match_mapping_type": "string",
+						"mapping": {
+							"type": "string",
+							"index": "not_analyzed"
+						}
+					}
+				}
+			],
+			"_all": {
+				"enabled": false
+			},
+			"_source": {
+				"enabled": true
+			},
+			"properties": {
+				"create_time": {
+					"type": "double",
+					"index": "not_analyzed",
+					"store": "yes"
+				},
+				"last_used": {
+					"type": "double",
+					"index": "not_analyzed",
+					"store": "yes"
+				},
+				"hash": {
+					"type": "string",
+					"index": "not_analyzed",
+					"store": "yes"
+				},
+				"query": {
+					"type": "object",
+					"enabled": false,
+					"index": "no",
+					"store": "yes"
+				}
+			}
+		}
+	}
+}
