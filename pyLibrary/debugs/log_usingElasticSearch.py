@@ -26,8 +26,9 @@ class Log_usingElasticSearch(BaseLog):
         settings ARE FOR THE ELASTICSEARCH INDEX
         """
         self.es = Cluster(settings).get_or_create_index(
-            schema=convert.json2value(convert.value2json(SCHEMA), paths=True),
+            schema=convert.json2value(convert.value2json(SCHEMA), leaves=True),
             limit_replicas=True,
+            tjson=False,
             settings=settings
         )
         self.queue = self.es.threaded_queue(max_size=max_size, batch_size=batch_size)
@@ -57,15 +58,10 @@ class Log_usingElasticSearch(BaseLog):
             pass
 
 
-
 SCHEMA = {
     "settings": {
-        "index.number_of_shards": 3,
-        "index.number_of_replicas": 2,
-        "index.store.throttle.type": "merge",
-        "index.store.throttle.max_bytes_per_sec": "2mb",
-        "index.cache.filter.expire": "1m",
-        "index.cache.field.type": "soft",
+        "index.number_of_shards": 2,
+        "index.number_of_replicas": 2
     },
     "mappings": {
         "_default_": {
@@ -73,11 +69,53 @@ SCHEMA = {
                 {
                     "values_strings": {
                         "match": "*",
-                        "match_mapping_type" : "string",
+                        "match_mapping_type": "string",
                         "mapping": {
                             "type": "string",
-                            "index": "not_analyzed"
+                            "index": "not_analyzed",
+                            "doc_values": True
                         }
+                    }
+                },
+                {
+                    "default_doubles": {
+                        "mapping": {
+                            "index": "not_analyzed",
+                            "type": "double",
+                            "doc_values": True
+                        },
+                        "match_mapping_type": "double",
+                        "match": "*"
+                    }
+                },
+                {
+                    "default_longs": {
+                        "mapping": {
+                            "index": "not_analyzed",
+                            "type": "long",
+                            "doc_values": True
+                        },
+                        "match_mapping_type": "long|integer",
+                        "match_pattern": "regex",
+                        "path_match": ".*"
+                    }
+                },
+                {
+                    "default_param_values": {
+                        "mapping": {
+                            "index": "not_analyzed",
+                            "doc_values": True
+                        },
+                        "match": "*$value"
+                    }
+                },
+                {
+                    "default_params": {
+                        "mapping": {
+                            "enabled": False,
+                            "source": "yes"
+                        },
+                        "path_match": "params.*"
                     }
                 }
             ],
@@ -89,16 +127,8 @@ SCHEMA = {
                 "enabled": True
             },
             "properties": {
-                "timestamp": {
-                    "type": "double",
-                    "index": "not_analyzed",
-                    "store": "yes"
-                },
                 "params": {
-                    "type": "object",
-                    "enabled": False,
-                    "index": "no",
-                    "store": "yes"
+                    "enabled": False
                 }
             }
         }
