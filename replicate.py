@@ -138,7 +138,11 @@ def main(settings):
     destination = elasticsearch.Cluster(settings.destination).get_or_create_index(settings.destination)
 
     # GET LAST UPDATED
-    last_updated = get_last_updated(destination, settings.primary_field)
+    if settings.since:
+        last_updated = settings.since
+    else:
+        last_updated = get_last_updated(destination, settings.primary_field)
+
     Log.note("updating records with {{primary_field}}>={{last_updated}}", last_updated=last_updated, primary_field=settings.primary_field)
 
     pending = get_pending(source, last_updated, settings.primary_field)
