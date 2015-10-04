@@ -1,6 +1,7 @@
 {
 	"primary_field": "timestamp",
 	"last_replication_time": "./results/data/orange_factor_last_replication_time.txt",
+	"batch_size": 100,
 	"fix":{
 		"bug":"int(bug)",
 		"starttime":"float(starttime)",
@@ -15,7 +16,7 @@
 		"debug": false
 	},
 	"destination": {
-		"host": "http://54.149.35.214",
+		"host": "http://activedata.allizom.org",
 //		"host": "http://localhost",
 		"port": 9200,
 		"index": "orange_factor",

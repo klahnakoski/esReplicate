@@ -13,10 +13,12 @@ from datetime import timedelta, datetime
 from pyLibrary.collections import MAX
 from pyLibrary.debugs import startup, constants
 from pyLibrary.debugs.logs import Log
-from pyLibrary.env import elasticsearch
+from pyLibrary.env import elasticsearch, http
 from pyLibrary.env.files import File
 from pyLibrary.queries import qb
 from pyLibrary.thread.threads import Queue, Thread
+from pyLibrary.times.dates import Date
+from pyLibrary.times.timer import Timer
 
 
 
@@ -28,12 +30,10 @@ from pyLibrary.thread.threads import Queue, Thread
 # 2) Physical proximity increases the probability of reduced latency
 # 3) The slave can be configured with better hardware
 # 4) The slave's exclusivity increases availability (Mozilla's public cluster may have time of high load)
-from pyLibrary.times.dates import Date
-from pyLibrary.times.timer import Timer
 
 far_back = datetime.utcnow() - timedelta(weeks=52)
 BATCH_SIZE = 1000
-
+http.ZIP_REQUEST = False
 
 def get_last_updated(es, primary_field):
     try:
@@ -130,6 +130,8 @@ def replicate(source, destination, pending, fixes):
 
 
 def main(settings):
+    global BATCH_SIZE
+
     current_time = Date.now()
     time_file = File(settings.last_replication_time)
 
@@ -142,6 +144,9 @@ def main(settings):
         last_updated = settings.since
     else:
         last_updated = get_last_updated(destination, settings.primary_field)
+
+    if settings.batch_size:
+        BATCH_SIZE = settings.batch_size
 
     Log.note("updating records with {{primary_field}}>={{last_updated}}", last_updated=last_updated, primary_field=settings.primary_field)
 
