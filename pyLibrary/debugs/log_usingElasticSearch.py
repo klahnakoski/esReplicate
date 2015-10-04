@@ -16,6 +16,7 @@ from pyLibrary.env.elasticsearch import Cluster
 from pyLibrary.meta import use_settings
 from pyLibrary.thread.threads import Thread
 from .logs import BaseLog
+from pyLibrary.times.durations import MINUTE
 
 
 class Log_usingElasticSearch(BaseLog):
@@ -34,17 +35,14 @@ class Log_usingElasticSearch(BaseLog):
         self.queue = self.es.threaded_queue(max_size=max_size, batch_size=batch_size)
 
     def write(self, template, params):
-        try:
-            if params.get("template"):
-                # DETECTED INNER TEMPLATE, ASSUME TRACE IS ON, SO DO NOT NEED THE OUTER TEMPLATE
-                self.queue.add({"value": params})
-            else:
-                if len(template) > 2000:
-                    template = template[:1997] + "..."
-                self.queue.add({"value": {"template": template, "params": params}})
-            return self
-        except Exception, e:
-            raise e  # OH NO!
+        if params.get("template"):
+            # DETECTED INNER TEMPLATE, ASSUME TRACE IS ON, SO DO NOT NEED THE OUTER TEMPLATE
+            self.queue.add({"value": params})
+        else:
+            if len(template) > 2000:
+                template = template[:1997] + "..."
+            self.queue.add({"value": {"template": template, "params": params}}, timeout=3*MINUTE)
+        return self
 
     def stop(self):
         try:
@@ -58,6 +56,7 @@ class Log_usingElasticSearch(BaseLog):
             pass
 
 
+
 SCHEMA = {
     "settings": {
         "index.number_of_shards": 2,
@@ -69,7 +68,7 @@ SCHEMA = {
                 {
                     "values_strings": {
                         "match": "*",
-                        "match_mapping_type": "string",
+                        "match_mapping_type" : "string",
                         "mapping": {
                             "type": "string",
                             "index": "not_analyzed",

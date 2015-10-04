@@ -249,6 +249,7 @@ def _get_attr(obj, path):
             Log.error(AMBIGUOUS_PATH_FOUND+" {{paths}}",  paths=attr_name)
         else:
             return _get_attr(obj[attr_name[0]], path[1:])
+
     try:
         obj = getattr(obj, attr_name)
         return _get_attr(obj, path[1:])
@@ -304,6 +305,10 @@ def wrap(v):
     if type_ is dict:
         m = Dict(v)
         return m
+        # m = object.__new__(Dict)
+        # object.__setattr__(m, "_dict", v)
+        # return m
+
     elif type_ is NoneType:
         return Null
     elif type_ is list:

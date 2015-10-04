@@ -33,13 +33,14 @@ from pyLibrary.env.big_data import safe_size, CompressedLines, ZipfileLines
 
 FILE_SIZE_LIMIT = 100 * 1024 * 1024
 MIN_READ_SIZE = 8 * 1024
+ZIP_REQUEST = False
 default_headers = Dict()  # TODO: MAKE THIS VARIABLE A SPECIAL TYPE OF EXPECTED MODULE PARAMETER SO IT COMPLAINS IF NOT SET
 default_timeout = 600
 
 _warning_sent = False
 
 
-def request(method, url, **kwargs):
+def request(method, url, zip=None, **kwargs):
     """
      JUST LIKE requests.request() BUT WITH DEFAULT HEADERS AND FIXES
      DEMANDS data IS ONE OF:
@@ -63,6 +64,9 @@ def request(method, url, **kwargs):
     session = sessions.Session()
     session.headers.update(default_headers)
 
+    if zip is None:
+        zip = ZIP_REQUEST
+
     if isinstance(url, unicode):
         # httplib.py WILL **FREAK OUT** IF IT SEES ANY UNICODE
         url = url.encode("ascii")
@@ -83,7 +87,7 @@ def request(method, url, **kwargs):
     timeout = kwargs[b'timeout'] = coalesce(kwargs.get(b'timeout'), default_timeout)
 
     try:
-        if len(coalesce(kwargs.get(b"data"))) > 1000:
+        if zip and len(coalesce(kwargs.get(b"data"))) > 1000:
             compressed = convert.bytes2zip(kwargs[b"data"])
             if b"headers" not in kwargs:
                 kwargs[b"headers"] = {}
