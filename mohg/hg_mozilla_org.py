@@ -198,6 +198,8 @@ class HgMozillaOrg(object):
                         )
                         if r.node == found_revision.changeset.id:
                             output = rev
+                        if r.node[0:12] == found_revision.changeset.id[0:12]:
+                            output = rev
                         _id = coalesce(rev.changeset.id12, "") + "-" + rev.branch.name + "-" + coalesce(rev.branch.locale, DEFAULT_LOCALE)
                         revs.append({"id": _id, "value": rev})
             self.es.extend(revs)

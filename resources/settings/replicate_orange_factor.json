@@ -7,7 +7,7 @@
 		"starttime":"float(starttime)",
 		"timestamp":"float(timestamp)",
 		"date":"Date(date).unix",
-		"push_date":"hg.get_revision({\"changeset\":{\"id\":rev}, \"branch\":tree})"
+		"push_date":"hg.get_revision(wrap({\"changeset\":{\"id\":rev}, \"branch\":{\"name\": tree.split('/')[-1]}})).push.date"
 	},
 	"hg":{
 		"$ref":"//../../mohg/resources/settings.json"

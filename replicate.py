@@ -13,6 +13,7 @@ from datetime import timedelta, datetime
 from pyLibrary.collections import MAX
 from pyLibrary.debugs import startup, constants
 from pyLibrary.debugs.logs import Log
+from pyLibrary.dot import wrap
 from pyLibrary.env import elasticsearch, http
 from pyLibrary.env.files import File
 from pyLibrary.queries import qb
@@ -28,13 +29,15 @@ from mohg.hg_mozilla_org import HgMozillaOrg
 #
 # Replication has a few benefits:
 # 1) The slave can have scripting enabled, allowing more powerful set of queries
-# 2) Physical proximity increases the probability of reduced latency
+# 2) Physical proximity increases latency
 # 3) The slave can be configured with better hardware
 # 4) The slave's exclusivity increases availability (Mozilla's public cluster may have time of high load)
 
 far_back = datetime.utcnow() - timedelta(weeks=52)
 BATCH_SIZE = 1000
 http.ZIP_REQUEST = False
+hg = None
+
 
 def get_last_updated(es, primary_field):
     try:
@@ -110,7 +113,10 @@ def replicate(source, destination, pending, fixes):
             locals()[k] = v
 
         for k, f in fixes.items():
-            _source[k] = eval(f)
+            try:
+                _source[k] = eval(f)
+            except Exception, e:
+                Log.alert("not evaluated {{expression}}", expression=f, cause=e)
 
         return _source
 
@@ -158,10 +164,10 @@ def main(settings):
     time_file.write(unicode(current_time.milli))
 
 
-hg = None
 
 def start():
     global hg
+    _ = wrap
 
     try:
         settings = startup.read_settings()
