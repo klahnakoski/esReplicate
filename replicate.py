@@ -86,7 +86,21 @@ def get_pending(es, since, primary_key):
                     "sort": [primary_key]
                 })
 
-            max_value = MAX([h.fields[primary_key] for h in result.hits.hits])
+            new_max_value = MAX([h.fields[primary_key] for h in result.hits.hits])
+            if max_value == new_max_value:
+                # GET ALL WITH THIS TIMESTAMP
+                result = es.search({
+                    "query": {"filtered": {
+                        "query": {"match_all": {}},
+                        "filter": {"term": {primary_key: unicode(max_value)}},
+                    }},
+                    "fields": ["_id", primary_key],
+                    "from": 0,
+                    "size": 1000000
+                })
+                max_value = new_max_value + 0.5
+            else:
+                max_value = new_max_value
 
             ids = result.hits.hits._id
             Log.note("Adding {{num}} to pending queue", num=len(ids))
