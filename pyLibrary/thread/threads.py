@@ -171,7 +171,7 @@ class Queue(object):
                     now = datetime.utcnow()
                     if self.next_warning < now:
                         self.next_warning = now + timedelta(seconds=wait_time)
-                        _Log.alert("Queue {{name}} is full ({{num}} items), thread(s) have been waiting {{wait_time}} sec",
+                        _Log.alert("Queue by name of {{name|quote}} is full with ({{num}} items), thread(s) have been waiting {{wait_time}} sec",
                             name=self.name,
                             num=len(self.queue),
                             wait_time=wait_time
