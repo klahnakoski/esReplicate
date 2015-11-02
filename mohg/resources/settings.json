@@ -1,7 +1,7 @@
 {
 		"use_cache": true,
 		"branches": {
-			"host": "http://activedata.allizom.org",
+			"host": "http://localhost",
 			"port": 9200,
 			"index": "branches",
 			"type": "branch",
@@ -13,7 +13,7 @@
 			"limit_replicas": false
 		},
 		"repo": {
-			"host": "http://activedata.allizom.org",
+			"host": "http://localhost",
 			"port": 9200,
 			"index": "repo",
 			"type": "revision",

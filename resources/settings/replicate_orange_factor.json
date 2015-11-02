@@ -6,7 +6,11 @@
 		"bug":"int(bug)",
 		"starttime":"float(starttime)",
 		"timestamp":"float(timestamp)",
-		"date":"Date(date).unix"
+		"date":"Date(date).unix",
+		"push_date":"hg.get_revision({\"changeset\":{\"id\":rev}, \"branch\":tree})"
+	},
+	"hg":{
+		"$ref":"//../../mohg/resources/settings.json"
 	},
 	"source": {
 		"host": "http://of-elasticsearch-zlb.webapp.scl3.mozilla.com",
@@ -16,8 +20,8 @@
 		"debug": false
 	},
 	"destination": {
-		"host": "http://activedata.allizom.org",
-//		"host": "http://localhost",
+//		"host": "http://activedata.allizom.org",
+		"host": "http://localhost",
 		"port": 9200,
 		"index": "orange_factor",
 		"type": "bug_info",

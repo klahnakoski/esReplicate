@@ -20,6 +20,7 @@ from pyLibrary.thread.threads import Queue, Thread
 from pyLibrary.times.dates import Date
 from pyLibrary.times.timer import Timer
 
+from mohg.hg_mozilla_org import HgMozillaOrg
 
 
 
@@ -157,11 +158,16 @@ def main(settings):
     time_file.write(unicode(current_time.milli))
 
 
+hg = None
+
 def start():
+    global hg
+
     try:
         settings = startup.read_settings()
         constants.set(settings.constants)
         Log.start(settings.debug)
+        hg = HgMozillaOrg(settings.hg)
         main(settings)
     except Exception, e:
         Log.error("Problems exist", e)
