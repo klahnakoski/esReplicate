@@ -72,7 +72,7 @@ class Lock(object):
         if isinstance(timeout, Duration):
             timeout = timeout.seconds
 
-        self.monitor.wait(timeout=timeout if timeout else None)
+        self.monitor.wait(timeout=float(timeout) if timeout else None)
 
     def notify_all(self):
         self.monitor.notify_all()
