@@ -191,8 +191,9 @@ def main(settings):
     )
     Thread.wait_for_shutdown_signal(please_stop=please_stop, allow_exit=True)
 
-    # RECORD LAST UPDATED
-    time_file.write(unicode(current_time.milli))
+    if not please_stop:
+        # RECORD LAST UPDATED< IF WE DID NOT CANCEL OUT
+        time_file.write(unicode(current_time.milli))
 
 
 def start():
