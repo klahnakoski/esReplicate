@@ -17,7 +17,7 @@ from pyLibrary.dot import wrap
 from pyLibrary.env import elasticsearch, http
 from pyLibrary.env.files import File
 from pyLibrary.queries import qb
-from pyLibrary.thread.threads import Queue, Thread
+from pyLibrary.thread.threads import Queue, Thread, Signal
 from pyLibrary.times.dates import Date
 from pyLibrary.times.timer import Timer
 
@@ -59,65 +59,58 @@ def get_last_updated(es, primary_field):
         return None
 
 
-def get_pending(es, since, primary_key):
-    pending_bugs = Queue("pending ids")
-
-    def filler(please_stop, max_value):
-        while not please_stop:
-            if max_value == None:
-                Log.note("Get all records")
-                result = es.search({
+def get_pending(es, since, pending_bugs, primary_key, please_stop):
+    while not please_stop:
+        if since == None:
+            Log.note("Get all records")
+            result = es.search({
+                "query": {"match_all": {}},
+                "fields": ["_id", primary_key],
+                "from": 0,
+                "size": BATCH_SIZE,
+                "sort": [primary_key]
+            })
+        else:
+            Log.note("Get records with {{primary_key}} >= {{max_time|datetime}}", primary_key=primary_key, max_time=since)
+            result = es.search({
+                "query": {"filtered": {
                     "query": {"match_all": {}},
-                    "fields": ["_id", primary_key],
-                    "from": 0,
-                    "size": BATCH_SIZE,
-                    "sort": [primary_key]
-                })
-            else:
-                Log.note("Get records with {{primary_key}} >= {{max_time|datetime}}", primary_key=primary_key, max_time=max_value)
-                result = es.search({
-                    "query": {"filtered": {
-                        "query": {"match_all": {}},
-                        "filter": {"range": {primary_key: {"gte": unicode(max_value)}}},
-                    }},
-                    "fields": ["_id", primary_key],
-                    "from": 0,
-                    "size": BATCH_SIZE,
-                    "sort": [primary_key]
-                })
+                    "filter": {"range": {primary_key: {"gte": unicode(since)}}},
+                }},
+                "fields": ["_id", primary_key],
+                "from": 0,
+                "size": BATCH_SIZE,
+                "sort": [primary_key]
+            })
 
-            new_max_value = MAX([h.fields[primary_key] for h in result.hits.hits])
-            if max_value == new_max_value:
-                # GET ALL WITH THIS TIMESTAMP
-                result = es.search({
-                    "query": {"filtered": {
-                        "query": {"match_all": {}},
-                        "filter": {"term": {primary_key: unicode(max_value)}},
-                    }},
-                    "fields": ["_id", primary_key],
-                    "from": 0,
-                    "size": 1000000
-                })
-                max_value = new_max_value + 0.5
-            else:
-                max_value = new_max_value
+        new_max_value = MAX([h.fields[primary_key] for h in result.hits.hits])
+        if since == new_max_value:
+            # GET ALL WITH THIS TIMESTAMP
+            result = es.search({
+                "query": {"filtered": {
+                    "query": {"match_all": {}},
+                    "filter": {"term": {primary_key: unicode(since)}},
+                }},
+                "fields": ["_id", primary_key],
+                "from": 0,
+                "size": 1000000
+            })
+            since = new_max_value + 0.5
+        else:
+            since = new_max_value
 
-            ids = result.hits.hits._id
-            Log.note("Adding {{num}} to pending queue", num=len(ids))
-            pending_bugs.extend(ids)
+        ids = result.hits.hits._id
+        Log.note("Adding {{num}} to pending queue", num=len(ids))
+        pending_bugs.extend(ids)
 
-            if len(result.hits.hits) < BATCH_SIZE:
-                pending_bugs.add(Thread.STOP)
-                break
+        if len(result.hits.hits) < BATCH_SIZE:
+            pending_bugs.add(Thread.STOP)
+            break
 
-        Log.note("Source has {{num}} bug versions for updating", num=len(pending_bugs))
-
-    Thread.run("get pending", target=filler, max_value=since)
-
-    return pending_bugs
+    Log.note("No more ids")
 
 
-def replicate(source, destination, pending, fixes):
+def replicate(source, destination, pending, fixes, please_stop):
     """
     COPY source RECORDS TO destination
     """
@@ -136,6 +129,9 @@ def replicate(source, destination, pending, fixes):
 
 
     for g, docs in qb.groupby(pending, max_size=BATCH_SIZE):
+        if please_stop:
+            break
+
         with Timer("Replicate {{num_docs}} bug versions", {"num_docs": len(docs)}):
             data = source.search({
                 "query": {"filtered": {
@@ -148,6 +144,8 @@ def replicate(source, destination, pending, fixes):
             })
 
             destination.extend([{"id": h._id, "value": fixer(h._source)} for h in data.hits.hits])
+
+    Log.note("Done replication")
 
 
 def main(settings):
@@ -171,12 +169,30 @@ def main(settings):
 
     Log.note("updating records with {{primary_field}}>={{last_updated}}", last_updated=last_updated, primary_field=settings.primary_field)
 
-    pending = get_pending(source, last_updated, settings.primary_field)
-    replicate(source, destination, pending, settings.fix)
+    please_stop = Signal()
+    pending = Queue("pending ids")
+    Thread.run(
+        "get pending",
+        get_pending,
+        es=source,
+        since=last_updated,
+        pending_bugs=pending,
+        primary_key=settings.primary_field,
+        please_stop=please_stop
+    )
+    Thread.run(
+        "replication",
+        replicate,
+        source,
+        destination,
+        pending,
+        settings.fix,
+        please_stop=please_stop
+    )
+    Thread.wait_for_shutdown_signal(please_stop=please_stop, allow_exit=True)
 
     # RECORD LAST UPDATED
     time_file.write(unicode(current_time.milli))
-
 
 
 def start():
