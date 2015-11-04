@@ -202,6 +202,7 @@ def main(settings):
     Thread.wait_for_shutdown_signal(please_stop=please_stop, allow_exit=True)
 
     if done:
+        Log.note("done all")
         # RECORD LAST UPDATED< IF WE DID NOT CANCEL OUT
         time_file.write(unicode(current_time.milli))
 
