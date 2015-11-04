@@ -172,7 +172,7 @@ def main(settings):
     please_stop = Signal()
     done = Signal()
 
-    def worker():
+    def worker(please_stop):
         pending = Queue("pending ids")
 
         pending_thread = Thread.run(
