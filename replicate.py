@@ -203,7 +203,7 @@ def main(settings):
         Log.note("done4")
 
     Thread.run("wait for replication to finish", worker, please_stop=please_stop)
-    Thread.wait_for_shutdown_signal(please_stop=please_stop, allow_exit=True)
+    Thread.wait_for_shutdown_signal(please_stop=please_stop)
 
     if done:
         Log.note("done all")
