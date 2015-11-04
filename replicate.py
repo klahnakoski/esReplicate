@@ -170,28 +170,38 @@ def main(settings):
     Log.note("updating records with {{primary_field}}>={{last_updated}}", last_updated=last_updated, primary_field=settings.primary_field)
 
     please_stop = Signal()
-    pending = Queue("pending ids")
-    Thread.run(
-        "get pending",
-        get_pending,
-        es=source,
-        since=last_updated,
-        pending_bugs=pending,
-        primary_key=settings.primary_field,
-        please_stop=please_stop
-    )
-    Thread.run(
-        "replication",
-        replicate,
-        source,
-        destination,
-        pending,
-        settings.fix,
-        please_stop=please_stop
-    )
+    done = Signal()
+
+    def worker():
+        pending = Queue("pending ids")
+
+        pending_thread = Thread.run(
+            "get pending",
+            get_pending,
+            es=source,
+            since=last_updated,
+            pending_bugs=pending,
+            primary_key=settings.primary_field,
+            please_stop=please_stop
+        )
+        replication_thread = Thread.run(
+            "replication",
+            replicate,
+            source,
+            destination,
+            pending,
+            settings.fix,
+            please_stop=please_stop
+        )
+        pending_thread.join()
+        replication_thread.join()
+        done.go()
+        please_stop.go()
+
+    Thread.run("wait for replication to finish", worker())
     Thread.wait_for_shutdown_signal(please_stop=please_stop, allow_exit=True)
 
-    if not please_stop:
+    if done:
         # RECORD LAST UPDATED< IF WE DID NOT CANCEL OUT
         time_file.write(unicode(current_time.milli))
 

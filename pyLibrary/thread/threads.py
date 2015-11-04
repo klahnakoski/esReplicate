@@ -578,7 +578,10 @@ class Thread(object):
         allow_exit=False  # ALLOW "exit" COMMAND ON CONSOLE TO ALSO STOP THE APP
     ):
         """
-        SLEEP UNTIL keyboard interrupt
+        FOR USE BY PROCESSES NOT EXPECTED TO EVER COMPLETE UNTIL EXTERNAL
+        SHUTDOWN IS REQUESTED
+
+        SLEEP UNTIL keyboard interrupt, OR please_stop, OR "exit"
         """
         if not isinstance(please_stop, Signal):
             please_stop = Signal()
