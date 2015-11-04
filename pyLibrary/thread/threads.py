@@ -155,7 +155,7 @@ class Queue(object):
         if timeout:
             time_to_stop_waiting = now + timeout
         else:
-            time_to_stop_waiting = datetime(2286, 11, 20, 17, 46, 39)
+            time_to_stop_waiting = Date.MAX
 
         if self.next_warning < now:
             self.next_warning = now + wait_time
