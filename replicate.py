@@ -160,7 +160,7 @@ def main(settings):
 
     # GET LAST UPDATED
     if settings.since != None:
-        last_updated = settings.since
+        last_updated = Date(settings.since).unix
     else:
         last_updated = get_last_updated(destination, settings.primary_field)
 

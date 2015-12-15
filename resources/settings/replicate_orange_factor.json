@@ -1,4 +1,5 @@
 {
+	"since":"1 nov 2015",
 	"primary_field": "timestamp",
 	"last_replication_time": "./results/data/orange_factor_last_replication_time.txt",
 	"batch_size": 100,
@@ -17,7 +18,7 @@
 		"port": 9200,
 		"index": "bugs",
 		"type": "bug_info",
-		"debug": false
+		"debug": true
 	},
 	"destination": {
 //		"host": "http://activedata.allizom.org",
@@ -35,7 +36,7 @@
 	},
 	"constants": {
 		"pyLibrary.env.http.default_headers": {
-			"From": "https://wiki.mozilla.org/Auto-tools/Projects/OrangeFactor#ActiveData"
+			"Referer": "https://wiki.mozilla.org/Auto-tools/Projects/OrangeFactor#ActiveData"
 		},
 		"pyLibrary.env.http.USE_COMPRESSION": false
 	},
