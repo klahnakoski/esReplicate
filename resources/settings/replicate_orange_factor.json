@@ -1,5 +1,4 @@
 {
-	"since":"1 nov 2015",
 	"primary_field": "timestamp",
 	"last_replication_time": "./results/data/orange_factor_last_replication_time.txt",
 	"batch_size": 100,
