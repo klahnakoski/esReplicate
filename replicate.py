@@ -139,7 +139,7 @@ def replicate(source, destination, pending, fixes, please_stop):
         if please_stop:
             break
 
-        with Timer("Replicate {{num_docs}} bug versions", {"num_docs": len(docs)}):
+        with Timer("Replicate {{num_docs}} documents", {"num_docs": len(docs)}):
             data = source.search({
                 "query": {"filtered": {
                     "query": {"match_all": {}},
