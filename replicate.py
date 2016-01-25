@@ -102,7 +102,12 @@ def get_pending(es, since, pending_bugs, primary_key, please_stop):
                 "from": 0,
                 "size": 100000
             })
-            since = new_max_value + 0.5
+            if Math.is_integer(new_max_value):
+                since = int(new_max_value)+1
+            elif Math.is_number(new_max_value):
+                since = float(new_max_value)+0.5
+            else:
+                since = unicode(new_max_value) + "a"
         else:
             since = new_max_value
 
