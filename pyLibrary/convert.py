@@ -7,36 +7,36 @@
 # Author: Kyle Lahnakoski (kyle@lahnakoski.com)
 #
 
-from __future__ import unicode_literals
+from __future__ import absolute_import
+from __future__ import absolute_import
 from __future__ import division
-from __future__ import absolute_import
-from __future__ import absolute_import
+from __future__ import unicode_literals
 
 import HTMLParser
 import StringIO
 import ast
 import base64
 import cgi
-from collections import Mapping
 import datetime
-from decimal import Decimal
 import gzip
 import hashlib
-from io import BytesIO
 import json
 import re
+from collections import Mapping
+from decimal import Decimal
+from io import BytesIO
 from tempfile import TemporaryFile
 
 from pyLibrary import strings
-from pyLibrary.dot import wrap, wrap_leaves, unwrap, unwraplist
 from pyLibrary.collections.multiset import Multiset
-from pyLibrary.debugs.logs import Log, Except
+from pyLibrary.debugs.exceptions import Except
+from pyLibrary.debugs.logs import Log
+from pyLibrary.dot import wrap, wrap_leaves, unwrap, unwraplist, split_field, join_field
 from pyLibrary.env.big_data import FileString, safe_size
 from pyLibrary.jsons import quote
 from pyLibrary.jsons.encoder import json_encoder, pypy_json_encode
 from pyLibrary.strings import expand_template
 from pyLibrary.times.dates import Date
-
 
 """
 DUE TO MY POOR MEMORY, THIS IS A LIST OF ALL CONVERSION ROUTINES
@@ -481,6 +481,7 @@ def bytes2sha1(value):
     sha = hashlib.sha1(value)
     return sha.hexdigest()
 
+
 def value2intlist(value):
     if value == None:
         return None
@@ -640,3 +641,54 @@ def _unPipe(value):
     return result + value[e::]
 
 json_decoder = json.JSONDecoder().decode
+
+
+def json_schema_to_markdown(schema):
+    from pyLibrary.queries import qb
+
+    def _md_code(code):
+        return "`"+code+"`"
+
+    def _md_italic(value):
+        return "*"+value+"*"
+
+    def _inner(schema, parent_name, indent):
+        more_lines = []
+        for k,v in schema.items():
+            full_name = join_field(split_field(parent_name)+[k])
+            details = indent+"* "+_md_code(full_name)
+            if v.type:
+                details += " - "+_md_italic(v.type)
+            else:
+                Log.error("{{full_name}} is missing type", full_name=full_name)
+            if v.description:
+                details += " " + v.description
+            more_lines.append(details)
+
+            if v.type in ["object", "array", "nested"]:
+                more_lines.extend(_inner(v.properties, full_name, indent+"  "))
+        return more_lines
+
+    lines = []
+    if schema.title:
+        lines.append("#"+schema.title)
+
+    lines.append(schema.description)
+    lines.append("")
+
+    for k, v in qb.sort(schema.properties.items(), 0):
+        full_name = k
+        if v.type in ["object", "array", "nested"]:
+            lines.append("##"+_md_code(full_name)+" Property")
+            if v.description:
+                lines.append(v.description)
+            lines.append("")
+
+            if v.type in ["object", "array", "nested"]:
+                lines.extend(_inner(v.properties, full_name, "  "))
+        else:
+            lines.append("##"+_md_code(full_name)+" ("+v.type+")")
+            if v.description:
+                lines.append(v.description)
+
+    return "\n".join(lines)

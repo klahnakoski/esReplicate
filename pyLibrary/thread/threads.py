@@ -39,7 +39,7 @@ def _late_import():
     global _Except
 
     from pyLibrary.debugs.logs import Log as _Log
-    from pyLibrary.debugs.logs import Except as _Except
+    from pyLibrary.debugs.exceptions import Except as _Except
 
     _ = _Log
     _ = _Except
@@ -76,7 +76,10 @@ class Lock(object):
         if isinstance(timeout, Duration):
             timeout = timeout.seconds
 
-        self.monitor.wait(timeout=float(timeout) if timeout else None)
+        try:
+            self.monitor.wait(timeout=float(timeout) if timeout!=None else None)
+        except Exception, e:
+            _Log.error("logic error using timeout {{timeout}}", timeout=timeout, cause=e)
 
     def notify_all(self):
         self.monitor.notify_all()
@@ -165,7 +168,7 @@ class Queue(object):
             self.next_warning = now + wait_time
 
         while self.keep_running and len(self.queue) > self.max:
-            if time_to_stop_waiting < now:
+            if now > time_to_stop_waiting:
                 if not _Log:
                     _late_import()
                 _Log.error(Thread.TIMEOUT)
@@ -233,7 +236,8 @@ class Queue(object):
                 if self.keep_running:
                     return None
 
-        _Log.note("queue stopped")
+        if DEBUG or not self.silent:
+            _Log.note(self.name + " queue stopped")
         return Thread.STOP
 
 
@@ -543,7 +547,7 @@ class Thread(object):
                 else:
                     _Log.error("Thread did not end well", cause=self.end_of_thread.exception)
             else:
-                from pyLibrary.debugs.logs import Except
+                from pyLibrary.debugs.exceptions import Except
 
                 raise Except(type=Thread.TIMEOUT)
 
@@ -584,7 +588,10 @@ class Thread(object):
             return
 
         if seconds != None:
-            time.sleep(seconds)
+            if isinstance(seconds, Duration):
+                time.sleep(seconds.total_seconds)
+            else:
+                time.sleep(seconds)
         elif till != None:
             if isinstance(till, datetime):
                 duration = (till - datetime.utcnow()).total_seconds()
@@ -697,7 +704,7 @@ class Signal(object):
             try:
                 j()
             except Exception, e:
-                _Log.warning("Trigger on Signal.go() failed!", e)
+                _Log.warning("Trigger on Signal.go() failed!", cause=e)
 
     def is_go(self):
         """
@@ -710,6 +717,9 @@ class Signal(object):
         """
         RUN target WHEN SIGNALED
         """
+        if not target:
+            _Log.error("expecting target")
+
         with self.lock:
             if self._go:
                 target()

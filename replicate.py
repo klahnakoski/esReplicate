@@ -194,13 +194,9 @@ def main(settings):
             please_stop=please_stop
         )
         pending_thread.join()
-        Log.note("done1")
         replication_thread.join()
-        Log.note("done2")
         done.go()
-        Log.note("done3")
         please_stop.go()
-        Log.note("done4")
 
     Thread.run("wait for replication to finish", worker, please_stop=please_stop)
     Thread.wait_for_shutdown_signal(please_stop=please_stop)
@@ -219,7 +215,8 @@ def start():
         settings = startup.read_settings()
         constants.set(settings.constants)
         Log.start(settings.debug)
-        hg = HgMozillaOrg(settings.hg)
+        if settings.hg:
+            hg = HgMozillaOrg(settings.hg)
         main(settings)
     except Exception, e:
         Log.error("Problems exist", e)

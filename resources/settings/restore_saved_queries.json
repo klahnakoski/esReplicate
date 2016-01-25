@@ -1,6 +1,6 @@
 {
 	"primary_field": "last_used",
-	"since":0,
+	"since": 0,
 	"last_replication_time": "./results/data/saved_queries_last_replication_time.txt",
 	"source": {
 		"host": "http://localhost",
