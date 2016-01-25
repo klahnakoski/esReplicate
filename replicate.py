@@ -13,9 +13,10 @@ from datetime import timedelta, datetime
 from pyLibrary.collections import MAX
 from pyLibrary.debugs import startup, constants
 from pyLibrary.debugs.logs import Log
-from pyLibrary.dot import wrap
+from pyLibrary.dot import wrap, unwraplist, literal_field
 from pyLibrary.env import elasticsearch, http
 from pyLibrary.env.files import File
+from pyLibrary.maths import Math
 from pyLibrary.queries import qb
 from pyLibrary.thread.threads import Queue, Thread, Signal
 from pyLibrary.times.dates import Date
@@ -64,7 +65,12 @@ def get_pending(es, since, pending_bugs, primary_key, please_stop):
         if since == None:
             Log.note("Get all records")
             result = es.search({
-                "query": {"match_all": {}},
+                # "query": {"match_all": {}},
+                "query": {
+                    "filtered": {
+                        "filter": {"exists": {"field": primary_key}},
+                        "query": {"match_all": {}}
+                    }},
                 "fields": ["_id", primary_key],
                 "from": 0,
                 "size": BATCH_SIZE,
@@ -75,7 +81,7 @@ def get_pending(es, since, pending_bugs, primary_key, please_stop):
             result = es.search({
                 "query": {"filtered": {
                     "query": {"match_all": {}},
-                    "filter": {"range": {primary_key: {"gte": unicode(since)}}},
+                    "filter": {"range": {primary_key: {"gte": since}}},
                 }},
                 "fields": ["_id", primary_key],
                 "from": 0,
@@ -83,17 +89,18 @@ def get_pending(es, since, pending_bugs, primary_key, please_stop):
                 "sort": [primary_key]
             })
 
-        new_max_value = MAX([h.fields[primary_key] for h in result.hits.hits])
+        new_max_value = MAX([unwraplist(h.fields[literal_field(primary_key)]) for h in result.hits.hits])
+
         if since == new_max_value:
             # GET ALL WITH THIS TIMESTAMP
             result = es.search({
                 "query": {"filtered": {
                     "query": {"match_all": {}},
-                    "filter": {"term": {primary_key: unicode(since)}},
+                    "filter": {"term": {primary_key: since}},
                 }},
                 "fields": ["_id", primary_key],
                 "from": 0,
-                "size": 1000000
+                "size": 100000
             })
             since = new_max_value + 0.5
         else:

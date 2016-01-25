@@ -1,0 +1,53 @@
+{
+	"primary_field": "changeset.date",
+	"last_replication_time": "./results/data/repo_last_replication_time.txt",
+	"source": {
+		"host": "http://activedata.allizom.org",
+		"port": 9200,
+		"index": "repo",
+		"type": "revision",
+		"debug": false
+	},
+	"destination": {
+		"host": "http://localhost",
+		"port": 9200,
+		"index": "repo",
+		"type": "revision",
+		"timeout": 300,
+		"schema": {
+			"$ref": "//.../mohg/resources/revision.json"
+		},
+		"debug": false,
+		"limit_replicas": true,
+		"zip": false
+	},
+	"constants": {
+		"pyLibrary.env.http.default_headers": {
+			"Referer": "https://wiki.mozilla.org/Auto-tools/Projects/ActiveData"
+		},
+		"pyLibrary.env.http.USE_COMPRESSION": false
+	},
+	"debug": {
+		"log": [
+			{
+				"log_type": "stream",
+				"stream": "sys.stdout"
+			},
+			{
+				"class" : "logging.handlers.RotatingFileHandler",
+				"filename" : "./results/logs/replicate_saved_queries.log",
+				"maxBytes" : 10000000,
+				"backupCount" : 10,
+				"encoding" : "utf8"
+			},
+			{
+				"log_type": "email",
+				"from_address": "klahnakoski@mozilla.com",
+				"to_address": "klahnakoski@mozilla.com",
+				"subject": "[ALERT][Toronto] Problem in replicate_repo",
+				"$ref": "file://~/private.json#email"
+
+			}
+		]
+	}
+}
