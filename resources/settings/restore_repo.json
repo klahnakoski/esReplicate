@@ -1,15 +1,16 @@
 {
 	"primary_field": "changeset.date",
+    "primary_interval": 2000000,  // 1 MONTH
 	"last_replication_time": "./results/data/repo_last_replication_time.txt",
 	"source": {
-		"host": "http://activedata.allizom.org",
+		"host": "http://klahnakoski-es.corp.tor1.mozilla.com",
 		"port": 9200,
 		"index": "repo",
 		"type": "revision",
 		"debug": false
 	},
 	"destination": {
-		"host": "http://localhost",
+		"host": "http://activedata.allizom.org",
 		"port": 9200,
 		"index": "repo",
 		"type": "revision",
@@ -35,7 +36,7 @@
 			},
 			{
 				"class" : "logging.handlers.RotatingFileHandler",
-				"filename" : "./results/logs/replicate_repo.log",
+				"filename" : "./results/logs/restore_repo.log",
 				"maxBytes" : 10000000,
 				"backupCount" : 10,
 				"encoding" : "utf8"
@@ -44,7 +45,7 @@
 				"log_type": "email",
 				"from_address": "klahnakoski@mozilla.com",
 				"to_address": "klahnakoski@mozilla.com",
-				"subject": "[ALERT][Toronto] Problem in replicate_repo",
+				"subject": "[ALERT][Toronto] Problem in restore_repo",
 				"$ref": "file://~/private.json#email"
 
 			}

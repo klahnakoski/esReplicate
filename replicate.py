@@ -29,24 +29,24 @@ from mohg.hg_mozilla_org import HgMozillaOrg
 # REPLICATION
 #
 # Replication has a few benefits:
-# 1) The slave can have scripting enabled, allowing more powerful set of queries
+# 1) The replicate can have scripting enabled, allowing more powerful set of queries
 # 2) Physical proximity increases latency
-# 3) The slave can be configured with better hardware
-# 4) The slave's exclusivity increases availability (Mozilla's public cluster may have time of high load)
+# 3) The replicate can be configured with better hardware
+# 4) The replicate's exclusivity increases availability (Mozilla's public cluster may have time of high load)
 
 far_back = datetime.utcnow() - timedelta(weeks=52)
 BATCH_SIZE = 1000
 http.ZIP_REQUEST = False
 hg = None
+config = None
 
-
-def get_last_updated(es, primary_field):
+def get_last_updated(es):
     try:
         results = es.search({
             "query": {"match_all": {}},
             "from": 0,
             "size": 0,
-            "facets": {"last_time": {"statistical": {"field": primary_field}}}
+            "facets": {"last_time": {"statistical": {"field": config.primary_field}}}
         })
 
         if results.facets.last_time.count == 0:
@@ -60,45 +60,45 @@ def get_last_updated(es, primary_field):
         return None
 
 
-def get_pending(es, since, pending_bugs, primary_key, please_stop):
+def get_pending(source, since, pending_bugs, please_stop):
     while not please_stop:
         if since == None:
             Log.note("Get all records")
-            result = es.search({
+            result = source.search({
                 # "query": {"match_all": {}},
                 "query": {
                     "filtered": {
-                        "filter": {"exists": {"field": primary_key}},
+                        "filter": {"exists": {"field": config.primary_field}},
                         "query": {"match_all": {}}
                     }},
-                "fields": ["_id", primary_key],
+                "fields": ["_id", config.primary_field],
                 "from": 0,
                 "size": BATCH_SIZE,
-                "sort": [primary_key]
+                "sort": [config.primary_field]
             })
         else:
-            Log.note("Get records with {{primary_key}} >= {{max_time|datetime}}", primary_key=primary_key, max_time=since)
-            result = es.search({
+            Log.note("Get records with {{primary_field}} >= {{max_time|datetime}}", primary_field=config.primary_field, max_time=since)
+            result = source.search({
                 "query": {"filtered": {
                     "query": {"match_all": {}},
-                    "filter": {"range": {primary_key: {"gte": since}}},
+                    "filter": {"range": {config.primary_field: {"gte": since}}},
                 }},
-                "fields": ["_id", primary_key],
+                "fields": ["_id", config.primary_field],
                 "from": 0,
                 "size": BATCH_SIZE,
-                "sort": [primary_key]
+                "sort": [config.primary_field]
             })
 
-        new_max_value = MAX([unwraplist(h.fields[literal_field(primary_key)]) for h in result.hits.hits])
+        new_max_value = MAX([unwraplist(h.fields[literal_field(config.primary_field)]) for h in result.hits.hits])
 
         if since == new_max_value:
             # GET ALL WITH THIS TIMESTAMP
-            result = es.search({
+            result = source.search({
                 "query": {"filtered": {
                     "query": {"match_all": {}},
-                    "filter": {"term": {primary_key: since}},
+                    "filter": {"term": {config.primary_field: since}},
                 }},
-                "fields": ["_id", primary_key],
+                "fields": ["_id", config.primary_field],
                 "from": 0,
                 "size": 100000
             })
@@ -122,7 +122,70 @@ def get_pending(es, since, pending_bugs, primary_key, please_stop):
     Log.note("No more ids")
 
 
-def replicate(source, destination, pending, fixes, please_stop):
+def diff(source, destination, pending, please_stop):
+    """
+    SEARCH FOR HOLES IN DESTINATION
+    :param source:
+    :param destination:
+    :param pending:  QUEUE TO FILL WITH MISSING RECORDS
+    :return:
+    """
+
+    if not config.primary_interval:
+        Log.warning("Require a `primary_interval` to hunt down possible holes in the destination.")
+        return
+
+    # FIND source MIN/MAX
+    results = source.search({
+        "query": {"match_all": {}},
+        "from": 0,
+        "size": 0,
+        "facets": {"last_time": {"statistical": {"field": config.primary_field}}}
+    })
+
+    if results.facets.last_time.count == 0:
+        return
+
+    for min_, max_ in qb.intervals(results.facets.last_time.min, results.facets.last_time.max, config.primary_interval):
+        try:
+            if please_stop:
+                Log.note("Scanning was aborted")
+                return
+
+            Log.note("Scan from {{min}} to {{max}}", min=min_, max=max_)
+            source_result = source.search({
+                "query": {"filtered": {
+                    "query": {"match_all": {}},
+                    "filter": {"range": {config.primary_field: {"gte": min_, "lt": max_}}}
+                }},
+                "fields": ["_id"],
+                "from": 0,
+                "size": 200000
+            })
+            source_ids = set(source_result.hits.hits._id)
+
+            destination_result = destination.search({
+                "query": {"filtered": {
+                    "query": {"match_all": {}},
+                    "filter": {"range": {config.primary_field: {"gte": min_, "lt": max_}}}
+                }},
+                "fields": ["_id"],
+                "from": 0,
+                "size": 200000
+            })
+            destination_ids = set(destination_result.hits.hits._id)
+
+            missing = source_ids - destination_ids
+
+            if missing:
+                pending.extend(missing)
+        except Exception, e:
+            Log.warning("Scanning had a problem", cause=e)
+
+    Log.note("Done scanning for holes")
+
+
+def replicate(source, destination, pending_ids, fixes, please_stop):
     """
     COPY source RECORDS TO destination
     """
@@ -140,10 +203,7 @@ def replicate(source, destination, pending, fixes, please_stop):
         return _source
 
 
-    for g, docs in qb.groupby(pending, max_size=BATCH_SIZE):
-        if please_stop:
-            break
-
+    for g, docs in qb.groupby(pending_ids, max_size=BATCH_SIZE):
         with Timer("Replicate {{num_docs}} documents", {"num_docs": len(docs)}):
             data = source.search({
                 "query": {"filtered": {
@@ -157,29 +217,33 @@ def replicate(source, destination, pending, fixes, please_stop):
 
             destination.extend([{"id": h._id, "value": fixer(h._source)} for h in data.hits.hits])
 
+        if please_stop:
+            break
+
+
     Log.note("Done replication")
 
 
-def main(settings):
+def main():
     global BATCH_SIZE
 
     current_time = Date.now()
-    time_file = File(settings.last_replication_time)
+    time_file = File(config.last_replication_time)
 
     # SYNCH WITH source ES INDEX
-    source = elasticsearch.Index(settings.source)
-    destination = elasticsearch.Cluster(settings.destination).get_or_create_index(settings.destination)
+    source = elasticsearch.Index(config.source)
+    destination = elasticsearch.Cluster(config.destination).get_or_create_index(config.destination)
 
     # GET LAST UPDATED
-    if settings.since != None:
-        last_updated = Date(settings.since).unix
+    if config.since != None:
+        last_updated = Date(config.since).unix
     else:
-        last_updated = get_last_updated(destination, settings.primary_field)
+        last_updated = get_last_updated(destination)
 
-    if settings.batch_size:
-        BATCH_SIZE = settings.batch_size
+    if config.batch_size:
+        BATCH_SIZE = config.batch_size
 
-    Log.note("updating records with {{primary_field}}>={{last_updated}}", last_updated=last_updated, primary_field=settings.primary_field)
+    Log.note("updating records with {{primary_field}}>={{last_updated}}", last_updated=last_updated, primary_field=config.primary_field)
 
     please_stop = Signal()
     done = Signal()
@@ -190,10 +254,17 @@ def main(settings):
         pending_thread = Thread.run(
             "get pending",
             get_pending,
-            es=source,
+            source=source,
             since=last_updated,
             pending_bugs=pending,
-            primary_key=settings.primary_field,
+            please_stop=please_stop
+        )
+        diff_thread = Thread.run(
+            "diff",
+            diff,
+            source,
+            destination,
+            pending,
             please_stop=please_stop
         )
         replication_thread = Thread.run(
@@ -202,10 +273,12 @@ def main(settings):
             source,
             destination,
             pending,
-            settings.fix,
+            config.fix,
             please_stop=please_stop
         )
         pending_thread.join()
+        diff_thread.join()
+        pending.add(Thread.STOP)
         replication_thread.join()
         done.go()
         please_stop.go()
@@ -221,15 +294,16 @@ def main(settings):
 
 def start():
     global hg
+    global config
     _ = wrap
 
     try:
-        settings = startup.read_settings()
-        constants.set(settings.constants)
-        Log.start(settings.debug)
-        if settings.hg:
-            hg = HgMozillaOrg(settings.hg)
-        main(settings)
+        config = startup.read_settings()
+        constants.set(config.constants)
+        Log.start(config.debug)
+        if config.hg:
+            hg = HgMozillaOrg(config.hg)
+        main()
     except Exception, e:
         Log.error("Problems exist", e)
     finally:
