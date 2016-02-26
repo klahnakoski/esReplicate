@@ -116,7 +116,6 @@ def get_pending(source, since, pending_bugs, please_stop):
         pending_bugs.extend(ids)
 
         if len(result.hits.hits) < BATCH_SIZE:
-            pending_bugs.add(Thread.STOP)
             break
 
     Log.note("No more ids")
@@ -152,7 +151,6 @@ def diff(source, destination, pending, please_stop):
                 Log.note("Scanning was aborted")
                 return
 
-            Log.note("Scan from {{min}} to {{max}}", min=min_, max=max_)
             source_result = source.search({
                 "query": {"filtered": {
                     "query": {"match_all": {}},
@@ -176,6 +174,14 @@ def diff(source, destination, pending, please_stop):
             destination_ids = set(destination_result.hits.hits._id)
 
             missing = source_ids - destination_ids
+            Log.note(
+                "Scan from {{min}} to {{max}}:  source={{source}}, dest={{dest}}, diff={{diff}}",
+                min=min_,
+                max=max_,
+                source=len(source_ids),
+                dest=len(destination_ids),
+                diff=len(missing)
+            )
 
             if missing:
                 pending.extend(missing)
