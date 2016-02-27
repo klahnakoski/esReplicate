@@ -1,6 +1,6 @@
 {
 	"primary_field": "changeset.date",
-    "primary_interval": 4000000,  // 1 MONTH
+    "primary_interval": 2000000,  // 1 MONTH
 	"last_replication_time": "./results/data/repo_last_replication_time.txt",
 	"source": {
 		"host": "http://klahnakoski-es.corp.tor1.mozilla.com",
