@@ -198,17 +198,7 @@ def diff(source, destination, pending, please_stop):
                 "size": 0
             })
 
-            destination_count = destination.search({
-                "query": {"filtered": {
-                    "query": {"match_all": {}},
-                    "filter": {"range": {config.primary_field: {"gte": min_, "lt": max_}}}
-                }},
-                "size": 0
-            })
-
-            if destination_count.hits.total == source_count.hits.total:
-                return
-            elif source_count.hits.total < 200000:
+            if source_count.hits.total < 200000:
                 _copy(min_, max_)
             else:
                 mid_ = int(round((min_+max_)/2, 0))
