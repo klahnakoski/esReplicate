@@ -145,7 +145,7 @@ def diff(source, destination, pending, please_stop):
     if results.facets.last_time.count == 0:
         return
 
-    for min_, max_ in qb.intervals(results.facets.last_time.min, results.facets.last_time.max, config.primary_interval):
+    def _copy(min_, max_):
         try:
             if please_stop:
                 Log.note("Scanning was aborted")
@@ -187,6 +187,37 @@ def diff(source, destination, pending, please_stop):
                 pending.extend(missing)
         except Exception, e:
             Log.warning("Scanning had a problem", cause=e)
+
+    def _partition(min_, max_):
+        try:
+            source_count = source.search({
+                "query": {"filtered": {
+                    "query": {"match_all": {}},
+                    "filter": {"range": {config.primary_field: {"gte": min_, "lt": max_}}}
+                }},
+                "size": 0
+            })
+
+            destination_count = destination.search({
+                "query": {"filtered": {
+                    "query": {"match_all": {}},
+                    "filter": {"range": {config.primary_field: {"gte": min_, "lt": max_}}}
+                }},
+                "size": 0
+            })
+
+            if destination_count.hits.total == source_count.hits.total:
+                return
+            elif source_count.hits.total < 200000:
+                _copy(min_, max_)
+            else:
+                mid_ = int(round((min_+max_)/2, 0))
+                _partition(min_, mid_)
+                _partition(mid_, max_)
+        except Exception, e:
+            Log.warning("Scanning had a problem", cause=e)
+
+    _partition(results.facets.last_time.min, results.facets.last_time.max)
 
     Log.note("Done scanning for holes")
 

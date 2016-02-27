@@ -1,6 +1,6 @@
 {
 	"primary_field": "changeset.date",
-	"primary_interval": 1000000,
+	"primary_interval": 500000,
 	"last_replication_time": "./results/data/repo_last_replication_time.txt",
 	"source": {
 		"host": "http://activedata.allizom.org",
