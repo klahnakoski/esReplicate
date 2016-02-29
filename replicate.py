@@ -40,6 +40,7 @@ http.ZIP_REQUEST = False
 hg = None
 config = None
 
+
 def get_last_updated(es):
     try:
         results = es.search({
@@ -130,10 +131,6 @@ def diff(source, destination, pending, please_stop):
     :return:
     """
 
-    if not config.primary_interval:
-        Log.warning("Require a `primary_interval` to hunt down possible holes in the destination.")
-        return
-
     # FIND source MIN/MAX
     results = source.search({
         "query": {"match_all": {}},
@@ -188,6 +185,9 @@ def diff(source, destination, pending, please_stop):
         except Exception, e:
             Log.warning("Scanning had a problem", cause=e)
 
+
+    num_mismatches = [0]  # TRACK NUMBER OF MISMATCHES DURING REPLICATION
+
     def _partition(min_, max_):
         try:
             source_count = source.search({
@@ -197,6 +197,21 @@ def diff(source, destination, pending, please_stop):
                 }},
                 "size": 0
             })
+
+            if num_mismatches[0] < 10:
+                # SOMETIMES THE TWO ARE TOO DIFFERENT TO BE OPTIMISTIC
+                dest_count = destination.search({
+                    "query": {"filtered": {
+                        "query": {"match_all": {}},
+                        "filter": {"range": {config.primary_field: {"gte": min_, "lt": max_}}}
+                    }},
+                    "size": 0
+                })
+
+                if source_count.hits.total==dest_count.hits.total:
+                    return
+                else:
+                    num_mismatches[0] += 1
 
             if source_count.hits.total < 200000:
                 _copy(min_, max_)
