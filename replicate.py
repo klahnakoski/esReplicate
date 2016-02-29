@@ -131,6 +131,9 @@ def diff(source, destination, pending, please_stop):
     :return:
     """
 
+    if not config.diff:
+        return
+
     # FIND source MIN/MAX
     results = source.search({
         "query": {"match_all": {}},
