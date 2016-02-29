@@ -131,7 +131,7 @@ def diff(source, destination, pending, please_stop):
     :return:
     """
 
-    if not config.diff:
+    if config.diff == False:
         return
 
     # FIND source MIN/MAX
