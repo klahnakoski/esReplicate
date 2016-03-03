@@ -10,6 +10,8 @@
 from __future__ import unicode_literals
 from __future__ import division
 from __future__ import absolute_import
+
+import string
 from collections import Mapping
 from copy import deepcopy
 from datetime import datetime
@@ -176,13 +178,13 @@ class Index(Features):
         RETURN THE INDEX USED BY THIS alias
         """
         alias_list = self.cluster.get_aliases()
-        output = sort([
+        output = qb.sort(set([
             a.index
             for a in alias_list
             if a.alias == alias or
                 a.index == alias or
                 (re.match(re.escape(alias) + "\\d{8}_\\d{6}", a.index) and a.index != alias)
-        ])
+        ]))
 
         if len(output) > 1:
             Log.error("only one index with given alias==\"{{alias}}\" expected",  alias= alias)
@@ -202,7 +204,7 @@ class Index(Features):
         return True
 
     def flush(self):
-        self.cluster.post("/" + self.settings.index + "/_refresh")
+        self.cluster.post("/" + self.settings.index + "/_flush", data={"wait_if_ongoing": True, "forced": True})
 
     def delete_record(self, filter):
         if self.settings.read_only:
@@ -581,8 +583,19 @@ class Cluster(object):
         es = Index(settings=settings)
         return es
 
-    def delete_index(self, index=None):
-        self.delete("/" + index)
+    def delete_index(self, index_name):
+        url = self.settings.host + ":" + unicode(self.settings.port) + "/" + index_name
+        try:
+            response = http.delete(url)
+            if response.status_code != 200:
+                Log.error("Expecting a 200")
+            details = convert.json2value(utf82unicode(response.content))
+            if self.debug:
+                Log.note("delete response {{response}}", response=details)
+            return response
+        except Exception, e:
+            Log.error("Problem with call to {{url}}", url=url, cause=e)
+
 
     def get_aliases(self):
         """
@@ -675,7 +688,7 @@ class Cluster(object):
             if response.status_code not in [200]:
                 Log.error(response.reason+": "+response.all_content)
             if self.debug:
-                Log.note("response: {{response}}", response=utf82unicode(response.all_content)[:130])
+                Log.note("response: {{response}}", response=strings.limit(utf82unicode(response.all_content), 130))
             details = wrap(convert.json2value(utf82unicode(response.all_content)))
             if details.error:
                 Log.error(details.error)
@@ -690,7 +703,7 @@ class Cluster(object):
             if response.status_code not in [200]:
                 Log.error(response.reason+": "+response.all_content)
             if self.debug:
-                Log.note("response: {{response}}",  response= utf82unicode(response.all_content)[:130])
+                Log.note("response: {{response}}", response=strings.limit(utf82unicode(response.all_content), 130))
             if response.all_content:
                 details = wrap(convert.json2value(utf82unicode(response.all_content)))
                 if details.error:
@@ -713,16 +726,6 @@ class Cluster(object):
                 Log.error(response.reason+": "+response.all_content)
             if self.debug:
                 Log.note("response: {{response}}",  response= utf82unicode(response.all_content)[0:300:])
-            return response
-        except Exception, e:
-            Log.error("Problem with call to {{url}}",  url= url, cause=e)
-
-    def delete(self, path, **kwargs):
-        url = self.settings.host + ":" + unicode(self.settings.port) + path
-        try:
-            response = convert.json2value(utf82unicode(http.delete(url, **kwargs).content))
-            if self.debug:
-                Log.note("delete response {{response}}",  response= response)
             return response
         except Exception, e:
             Log.error("Problem with call to {{url}}",  url= url, cause=e)
@@ -805,7 +808,8 @@ class Alias(Features):
         self.debug = debug
         if self.debug:
             Log.alert("Elasticsearch debugging on {{index|quote}} is on",  index= settings.index)
-
+        if alias == None:
+            Log.error("Alias can not be None")
         self.settings = settings
         self.cluster = Cluster(settings)
 
