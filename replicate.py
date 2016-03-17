@@ -60,66 +60,69 @@ def get_last_updated(es):
 
 
 def get_pending(source, since, pending_bugs, please_stop):
-    while not please_stop:
-        if since == None:
-            Log.note("Get all records")
-            result = source.search({
-                # "query": {"match_all": {}},
-                "query": {
-                    "filtered": {
-                        "filter": {"exists": {"field": config.primary_field}},
-                        "query": {"match_all": {}}
-                    }},
-                "fields": ["_id", config.primary_field],
-                "from": 0,
-                "size": BATCH_SIZE,
-                "sort": [config.primary_field]
-            })
-        else:
-            Log.note("Get records with {{primary_field}} >= {{max_time|datetime}}", primary_field=config.primary_field,
-                     max_time=since)
-            result = source.search({
-                "query": {"filtered": {
-                    "query": {"match_all": {}},
-                    "filter": {"range": {config.primary_field: {"gte": since}}},
-                }},
-                "fields": ["_id", config.primary_field],
-                "from": 0,
-                "size": BATCH_SIZE,
-                "sort": [config.primary_field]
-            })
-
-        new_max_value = MAX([unwraplist(h.fields[literal_field(config.primary_field)]) for h in result.hits.hits])
-
-        if since == new_max_value:
-            # GET ALL WITH THIS TIMESTAMP
-            result = source.search({
-                "query": {"filtered": {
-                    "query": {"match_all": {}},
-                    "filter": {"term": {config.primary_field: since}},
-                }},
-                "fields": ["_id", config.primary_field],
-                "from": 0,
-                "size": 100000
-            })
-            if Math.is_integer(new_max_value):
-                since = int(new_max_value) + 1
-            elif Math.is_number(new_max_value):
-                since = float(new_max_value) + 0.5
+    try:
+        while not please_stop:
+            if since == None:
+                Log.note("Get all records")
+                result = source.search({
+                    # "query": {"match_all": {}},
+                    "query": {
+                        "filtered": {
+                            "filter": {"exists": {"field": config.primary_field}},
+                            "query": {"match_all": {}}
+                        }},
+                    "fields": ["_id", config.primary_field],
+                    "from": 0,
+                    "size": BATCH_SIZE,
+                    "sort": [config.primary_field]
+                })
             else:
-                since = unicode(new_max_value) + "a"
-        else:
-            since = new_max_value
+                Log.note("Get records with {{primary_field}} >= {{max_time|datetime}}", primary_field=config.primary_field,
+                         max_time=since)
+                result = source.search({
+                    "query": {"filtered": {
+                        "query": {"match_all": {}},
+                        "filter": {"range": {config.primary_field: {"gte": since}}},
+                    }},
+                    "fields": ["_id", config.primary_field],
+                    "from": 0,
+                    "size": BATCH_SIZE,
+                    "sort": [config.primary_field]
+                })
 
-        ids = result.hits.hits._id
-        Log.note("Adding {{num}} to pending queue", num=len(ids))
-        pending_bugs.extend(ids)
+            new_max_value = MAX([unwraplist(h.fields[literal_field(config.primary_field)]) for h in result.hits.hits])
 
-        if len(result.hits.hits) < BATCH_SIZE:
-            break
+            if since == new_max_value:
+                # GET ALL WITH THIS TIMESTAMP
+                result = source.search({
+                    "query": {"filtered": {
+                        "query": {"match_all": {}},
+                        "filter": {"term": {config.primary_field: since}},
+                    }},
+                    "fields": ["_id", config.primary_field],
+                    "from": 0,
+                    "size": 100000
+                })
+                if Math.is_integer(new_max_value):
+                    since = int(new_max_value) + 1
+                elif Math.is_number(new_max_value):
+                    since = float(new_max_value) + 0.5
+                else:
+                    since = unicode(new_max_value) + "a"
+            else:
+                since = new_max_value
 
-    Log.note("No more ids")
+            ids = result.hits.hits._id
+            Log.note("Adding {{num}} to pending queue", num=len(ids))
+            pending_bugs.extend(ids)
 
+            if len(result.hits.hits) < BATCH_SIZE:
+                break
+
+        Log.note("No more ids")
+    except Exception, e:
+        please_stop.go()
+        Log.error("Problem while copying records", cause=e)
 
 def diff(source, destination, pending, please_stop):
     """
@@ -226,10 +229,15 @@ def diff(source, destination, pending, please_stop):
 
             if source_count.hits.total < 200000:
                 _copy(min_, max_)
-            else:
-                mid_ = int(round((min_ + max_) / 2, 0))
-                _partition(min_, mid_)
+            elif Math.is_number(min_) and Math.is_number(max_):
+                mid_ = int(round((float(min_) + float(max_)) / 2, 0))
+                # WORK BACKWARDS
                 _partition(mid_, max_)
+                _partition(min_, mid_)
+            else:
+                Log.error("can not split alphabetical in half")
+
+
         except Exception, e:
             Log.warning("Scanning had a problem", cause=e)
 
@@ -251,7 +259,11 @@ def replicate(source, destination, pending_ids, fixes, please_stop):
             try:
                 _source[k] = eval(f)
             except Exception, e:
-                Log.alert("not evaluated {{expression}}", expression=f, cause=e)
+                if "Problem pulling pushlog" in e:
+                    pass
+                else:
+                    eval(f)
+                    Log.warning("not evaluated {{expression}}", expression=f, cause=e)
 
         return _source
 
