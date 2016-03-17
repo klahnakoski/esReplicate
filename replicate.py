@@ -17,14 +17,12 @@ from pyLibrary.dot import wrap, unwraplist, literal_field
 from pyLibrary.env import elasticsearch, http
 from pyLibrary.env.files import File
 from pyLibrary.maths import Math
-from pyLibrary.queries import qb
+from pyLibrary.queries import jx
 from pyLibrary.thread.threads import Queue, Thread, Signal
 from pyLibrary.times.dates import Date
 from pyLibrary.times.timer import Timer
 
 from mohg.hg_mozilla_org import HgMozillaOrg
-
-
 
 # REPLICATION
 #
@@ -78,7 +76,8 @@ def get_pending(source, since, pending_bugs, please_stop):
                 "sort": [config.primary_field]
             })
         else:
-            Log.note("Get records with {{primary_field}} >= {{max_time|datetime}}", primary_field=config.primary_field, max_time=since)
+            Log.note("Get records with {{primary_field}} >= {{max_time|datetime}}", primary_field=config.primary_field,
+                     max_time=since)
             result = source.search({
                 "query": {"filtered": {
                     "query": {"match_all": {}},
@@ -104,9 +103,9 @@ def get_pending(source, since, pending_bugs, please_stop):
                 "size": 100000
             })
             if Math.is_integer(new_max_value):
-                since = int(new_max_value)+1
+                since = int(new_max_value) + 1
             elif Math.is_number(new_max_value):
-                since = float(new_max_value)+0.5
+                since = float(new_max_value) + 0.5
             else:
                 since = unicode(new_max_value) + "a"
         else:
@@ -135,15 +134,25 @@ def diff(source, destination, pending, please_stop):
         return
 
     # FIND source MIN/MAX
-    results = source.search({
+    results_max = source.search({
         "query": {"match_all": {}},
         "from": 0,
-        "size": 0,
-        "facets": {"last_time": {"statistical": {"field": config.primary_field}}}
+        "size": 1,
+        "sort": {config.primary_field: "desc"}
     })
 
-    if results.facets.last_time.count == 0:
+    results_min = source.search({
+        "query": {"match_all": {}},
+        "from": 0,
+        "size": 1,
+        "sort": {config.primary_field: "asc"}
+    })
+
+    if results_max.hits.total == 0:
         return
+
+    _min = results_min.hits.hits[0]._source[config.primary_field]
+    _max = results_max.hits.hits[0]._source[config.primary_field]
 
     def _copy(min_, max_):
         try:
@@ -188,7 +197,6 @@ def diff(source, destination, pending, please_stop):
         except Exception, e:
             Log.warning("Scanning had a problem", cause=e)
 
-
     num_mismatches = [0]  # TRACK NUMBER OF MISMATCHES DURING REPLICATION
 
     def _partition(min_, max_):
@@ -211,7 +219,7 @@ def diff(source, destination, pending, please_stop):
                     "size": 0
                 })
 
-                if source_count.hits.total==dest_count.hits.total:
+                if source_count.hits.total == dest_count.hits.total:
                     return
                 else:
                     num_mismatches[0] += 1
@@ -219,13 +227,13 @@ def diff(source, destination, pending, please_stop):
             if source_count.hits.total < 200000:
                 _copy(min_, max_)
             else:
-                mid_ = int(round((min_+max_)/2, 0))
+                mid_ = int(round((min_ + max_) / 2, 0))
                 _partition(min_, mid_)
                 _partition(mid_, max_)
         except Exception, e:
             Log.warning("Scanning had a problem", cause=e)
 
-    _partition(results.facets.last_time.min, results.facets.last_time.max)
+    _partition(_min, _max)
 
     Log.note("Done scanning for holes")
 
@@ -247,8 +255,7 @@ def replicate(source, destination, pending_ids, fixes, please_stop):
 
         return _source
 
-
-    for g, docs in qb.groupby(pending_ids, max_size=BATCH_SIZE):
+    for g, docs in jx.groupby(pending_ids, max_size=BATCH_SIZE):
         with Timer("Replicate {{num_docs}} documents", {"num_docs": len(docs)}):
             data = source.search({
                 "query": {"filtered": {
@@ -264,7 +271,6 @@ def replicate(source, destination, pending_ids, fixes, please_stop):
 
         if please_stop:
             break
-
 
     Log.note("Done replication")
 
@@ -288,7 +294,8 @@ def main():
     if config.batch_size:
         BATCH_SIZE = config.batch_size
 
-    Log.note("updating records with {{primary_field}}>={{last_updated}}", last_updated=last_updated, primary_field=config.primary_field)
+    Log.note("updating records with {{primary_field}}>={{last_updated}}", last_updated=last_updated,
+             primary_field=config.primary_field)
 
     please_stop = Signal()
     done = Signal()
