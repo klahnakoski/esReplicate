@@ -313,7 +313,7 @@ def main():
     done = Signal()
 
     def worker(please_stop):
-        pending = Queue("pending ids")
+        pending = Queue("pending ids", silent=True)
 
         pending_thread = Thread.run(
             "get pending",
