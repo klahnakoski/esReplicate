@@ -261,8 +261,9 @@ def replicate(source, destination, pending_ids, fixes, please_stop):
             except Exception, e:
                 if "Problem pulling pushlog" in e:
                     pass
+                elif "can not find branch" in e:
+                    pass
                 else:
-                    eval(f)
                     Log.warning("not evaluated {{expression}}", expression=f, cause=e)
 
         return _source
