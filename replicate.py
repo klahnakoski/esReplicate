@@ -41,16 +41,19 @@ config = None
 
 def get_last_updated(es):
     try:
-        results = es.search({
+        results_max = es.search({
             "query": {"match_all": {}},
             "from": 0,
-            "size": 0,
-            "facets": {"last_time": {"statistical": {"field": config.primary_field}}}
+            "size": 1,
+            "sort": {config.primary_field: "desc"}
         })
 
-        if results.facets.last_time.count == 0:
-            return Date.MIN
-        return results.facets.last_time.max
+        max_ = results_max.hits.hits[0]._source[config.primary_field]
+        if isinstance(max_, unicode):
+            pass
+        elif Math.is_integer(max_):
+            max_ = int(max_)
+        return max_
     except Exception, e:
         Log.warning("Can not get_last_updated from {{host}}/{{index}}", {
             "host": es.settings.host,
@@ -77,8 +80,11 @@ def get_pending(source, since, pending_bugs, please_stop):
                     "sort": [config.primary_field]
                 })
             else:
-                Log.note("Get records with {{primary_field}} >= {{max_time|datetime}}", primary_field=config.primary_field,
-                         max_time=since)
+                Log.note(
+                    "Get records with {{primary_field}} >= {{max_time|datetime}}",
+                    primary_field=config.primary_field,
+                    max_time=since
+                )
                 result = source.search({
                     "query": {"filtered": {
                         "query": {"match_all": {}},
@@ -123,6 +129,7 @@ def get_pending(source, since, pending_bugs, please_stop):
     except Exception, e:
         please_stop.go()
         Log.error("Problem while copying records", cause=e)
+
 
 def diff(source, destination, pending, please_stop):
     """

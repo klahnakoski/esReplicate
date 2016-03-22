@@ -17,11 +17,11 @@
 		"port": 9200,
 		"index": "bugs",
 		"type": "bug_info",
-		"debug": true
+		"debug": false
 	},
 	"destination": {
-//		"host": "http://activedata.allizom.org",
-		"host": "http://localhost",
+		"host": "http://activedata.allizom.org",
+//		"host": "http://localhost",
 		"port": 9200,
 		"index": "orange_factor",
 		"type": "bug_info",
