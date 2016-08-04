@@ -248,9 +248,10 @@ def diff(source, destination, pending, please_stop):
         except Exception, e:
             Log.warning("Scanning had a problem", cause=e)
 
-    _partition(_min, _max)
-
-    Log.note("Done scanning for holes")
+    try:
+        _partition(_min, _max)
+    finally:
+        Log.note("Done scanning for holes")
 
 
 def replicate(source, destination, pending_ids, fixes, please_stop):
@@ -321,7 +322,7 @@ def main():
     done = Signal()
 
     def worker(please_stop):
-        pending = Queue("pending ids", silent=True)
+        pending = Queue("pending ids", silent=False)
 
         pending_thread = Thread.run(
             "get pending",
