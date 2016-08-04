@@ -42,20 +42,19 @@ def parse(json, path, expected_vars=NO_VARS):
 
     LARGE MANY-PROPERTY OBJECTS CAN BE HANDLED BY `items()`
 
-    path - AN ARRAY OF DOT-SEPARATED STRINGS INDICATING THE NESTED ARRAY
-    BEING ITERATED.
-
-    RETURNS AN ITERATOR OVER ALL OBJECTS FROM NESTED path IN LEAF FORM
-
-    json - SOME STRING-LIKE STRUCTURE THAT CAN ASSUME WE LOOK AT ONE CHARACTER AT A TIME, IN ORDER
-    vars - REQUIRED PROPERTY NAMES, USED TO DETERMINE IF MORE-THAN-ONE PASS IS REQUIRED
+    :param json: SOME STRING-LIKE STRUCTURE THAT CAN ASSUME WE LOOK AT ONE
+                 CHARACTER AT A TIME, IN ORDER
+    :param path: AN ARRAY OF DOT-SEPARATED STRINGS INDICATING THE
+                 NESTED ARRAY BEING ITERATED.
+    :param expected_vars: REQUIRED PROPERTY NAMES, USED TO DETERMINE IF
+                          MORE-THAN-ONE PASS IS REQUIRED
+    :return: RETURNS AN ITERATOR OVER ALL OBJECTS FROM NESTED path IN LEAF FORM
     """
-
     if hasattr(json, "read"):
         # ASSUME IT IS A STREAM
         temp = json
         def get_more():
-            temp.read(MIN_READ_SIZE)
+            return temp.read(MIN_READ_SIZE)
         json = List_usingStream(get_more)
     elif hasattr(json, "__call__"):
         json = List_usingStream(json)
@@ -63,7 +62,6 @@ def parse(json, path, expected_vars=NO_VARS):
         json = List_usingStream(json.next)
     else:
         Log.error("Expecting json to be a stream, or a function that will return more bytes")
-
 
 
     def _decode(index, parent_path, path, name2index, expected_vars=NO_VARS):
@@ -266,7 +264,6 @@ def parse(json, path, expected_vars=NO_VARS):
                     break
                 index += 1
             return float(json.release(index)), index
-
 
     def skip_whitespace(index):
         """

@@ -14,6 +14,7 @@ from __future__ import absolute_import
 
 from pyLibrary.collections import PRODUCT, reverse, MAX, MIN, OR
 from pyLibrary import convert
+from pyLibrary.debugs.exceptions import suppress_exception
 from pyLibrary.debugs.logs import Log
 from pyLibrary.dot import Null, Dict, coalesce
 from pyLibrary.meta import use_settings
@@ -43,7 +44,10 @@ class Matrix(object):
         self.dims = tuple(dims)
         if zeros != None:
             if self.num == 0 or OR(d == 0 for d in dims):  #NO DIMS, OR HAS A ZERO DIM, THEN IT IS A NULL CUBE
-                self.cube = zeros
+                if hasattr(zeros, "__call__"):
+                    self.cube = zeros()
+                else:
+                    self.cube = zeros
             else:
                 self.cube = _zeros(dims, zero=zeros)
         else:
@@ -290,7 +294,10 @@ def _zeros(dims, zero):
     if d0 == 0:
         Log.error("Zero dimensions not allowed")
     if len(dims) == 1:
-        return [zero] * d0
+        if hasattr(zero, "__call__"):
+            return [zero() for _ in range(d0)]
+        else:
+            return [zero] * d0
     else:
         return [_zeros(dims[1::], zero) for _ in range(d0)]
 
@@ -335,9 +342,7 @@ def _getitem(c, i):
             dims, cube = zip(*[_getitem(cc, i[1::]) for cc in sub])
             return (len(cube),)+dims[0], cube
         else:
-            try:
+            with suppress_exception:
                 return _getitem(c[select], i[1::])
-            except Exception, _:
-                pass
 
 
