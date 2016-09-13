@@ -64,7 +64,7 @@ class Log(object):
 
         if settings.cprofile is False:
             settings.cprofile = {"enabled": False}
-        elif settings.cprofile is True or (isinstance(settings.cprofile, Mapping) and settings.cprofile.enabled):
+        elif settings.cprofile is True or (settings.cprofile.enabled and isinstance(settings.cprofile, Mapping)):
             if isinstance(settings.cprofile, bool):
                 settings.cprofile = {"enabled": True, "filename": "cprofile.tab"}
 
@@ -73,7 +73,7 @@ class Log(object):
             cls.cprofiler = cProfile.Profile()
             cls.cprofiler.enable()
 
-        if settings.profile is True or (isinstance(settings.profile, Mapping) and settings.profile.enabled):
+        if settings.profile is True or (settings.profile.enabled and isinstance(settings.profile, Mapping)):
             from pyLibrary.debugs import profiles
 
             if isinstance(settings.profile, bool):
