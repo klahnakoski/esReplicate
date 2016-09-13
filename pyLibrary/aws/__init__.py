@@ -19,7 +19,7 @@ import requests
 from pyLibrary import convert
 from pyLibrary.debugs.exceptions import Except
 from pyLibrary.debugs.logs import Log
-from pyLibrary.dot import wrap, unwrap
+from pyLibrary.dot import wrap, unwrap, coalesce
 from pyLibrary.maths import Math
 from pyLibrary.meta import use_settings, cache
 from pyLibrary.thread.threads import Thread
@@ -41,7 +41,7 @@ class Queue(object):
         self.pending = []
 
         if settings.region not in [r.name for r in sqs.regions()]:
-            Log.error("Can not find region {{region}} in {{regions}}",  region= settings.region,  regions= [r.name for r in sqs.regions()])
+            Log.error("Can not find region {{region}} in {{regions}}", region=settings.region, regions=[r.name for r in sqs.regions()])
 
         conn = sqs.connect_to_region(
             region_name=unwrap(settings.region),
@@ -50,7 +50,7 @@ class Queue(object):
         )
         self.queue = conn.get_queue(settings.name)
         if self.queue == None:
-            Log.error("Can not find queue with name {{queue}} in region {{region}}",  queue= settings.name,  region= settings.region)
+            Log.error("Can not find queue with name {{queue}} in region {{region}}", queue=settings.name, region=settings.region)
 
     def __enter__(self):
         return self
@@ -105,8 +105,7 @@ class Queue(object):
 
     def rollback(self):
         if self.pending:
-            pending = self.pending
-            self.pending = []
+            pending, self.pending = self.pending, []
 
             for p in pending:
                 m = Message()
@@ -141,12 +140,11 @@ def capture_termination_signal(please_stop):
 
     Thread.run("listen for termination", worker)
 
-
 def get_instance_metadata(timeout=None):
     if not isinstance(timeout, (int, float)):
         timeout = Duration(timeout).seconds
 
-    output = wrap({k.replace("-", "_"): v for k, v in boto_utils.get_instance_metadata(timeout=5, num_retries=2).items()})
+    output = wrap({k.replace("-", "_"): v for k, v in boto_utils.get_instance_metadata(timeout=coalesce(timeout, 5), num_retries=2).items()})
     return output
 
 

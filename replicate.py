@@ -322,7 +322,7 @@ def main():
     done = Signal()
 
     def worker(please_stop):
-        pending = Queue("pending ids", silent=False)
+        pending = Queue("pending ids", max=BATCH_SIZE*3, silent=False)
 
         pending_thread = Thread.run(
             "get pending",
