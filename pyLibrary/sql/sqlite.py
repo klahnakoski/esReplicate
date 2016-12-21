@@ -14,17 +14,35 @@ from __future__ import unicode_literals
 
 import sqlite3
 
+from pyLibrary import convert
 from pyLibrary.debugs.exceptions import Except, extract_stack, ERROR
 from pyLibrary.debugs.logs import Log
 from pyLibrary.dot import Dict
 from pyLibrary.env.files import File
+from pyLibrary.sql import DB, SQL
 from pyLibrary.thread.threads import Queue, Signal, Thread
 from pyLibrary.times.timer import Timer
 
 DEBUG = True
 
 
-class Sqlite(object):
+_upgraded = False
+def _upgrade():
+    global _upgraded
+    _upgraded = True
+    try:
+        import sys
+
+        sqlite_dll = File.new_instance(sys.exec_prefix, "dlls/sqlite3.dll")
+        python_dll = File("pyLibrary/vendor/sqlite/sqlite3.dll")
+        if python_dll.read_bytes() != sqlite_dll.read_bytes():
+            backup = sqlite_dll.backup()
+            File.copy(python_dll, sqlite_dll)
+    except Exception, e:
+        Log.warning("could not upgrade python's sqlite", cause=e)
+
+
+class Sqlite(DB):
     """
     Allows multi-threaded access
     Loads extension functions (like SQRT)
@@ -37,6 +55,9 @@ class Sqlite(object):
         :param db:  Optional, wrap a sqlite db in a thread
         :return: Multithread save database
         """
+        if not _upgraded:
+            _upgrade()
+
         self.db = None
         self.queue = Queue("sql commands")   # HOLD (command, result, signal) PAIRS
         self.worker = Thread.run("sqlite db thread", self._worker)
@@ -57,7 +78,7 @@ class Sqlite(object):
 
     def query(self, command):
         """
-        WILL STALL CALLING THREAD UNTIL THE command IS COMPLETED
+        WILL BLOCK CALLING THREAD UNTIL THE command IS COMPLETED
         :param command: COMMAND FOR SQLITE
         :return: list OF RESULTS
         """
@@ -97,6 +118,7 @@ class Sqlite(object):
                         try:
                             curr = self.db.execute(command)
                             result.meta.format = "table"
+                            result.header = [d[0] for d in curr.description] if curr.description else None
                             result.data = curr.fetchall()
                         except Exception, e:
                             e = Except.wrap(e)
@@ -120,14 +142,8 @@ class Sqlite(object):
         finally:
             self.db.close()
 
-
-try:
-    import sys
-
-    sqlite_dll = File.new_instance(sys.exec_prefix, "dlls/sqlite3.dll")
-    python_dll = File("pyLibrary/vendor/sqlite/sqlite3.dll")
-    if python_dll.read_bytes() != sqlite_dll.read_bytes():
-        backup = sqlite_dll.backup()
-        File.copy(python_dll, sqlite_dll)
-except Exception, e:
-    Log.warning("could not upgrade python's sqlite", cause=e)
+    def quote_column(self, column_name, table=None):
+        if table != None:
+            return SQL(convert.value2quote(table)+"."+convert.value2quote(column_name))
+        else:
+            return SQL(convert.value2quote(column_name))

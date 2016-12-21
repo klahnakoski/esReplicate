@@ -42,6 +42,8 @@ from pyLibrary.times.dates import Date
 DUE TO MY POOR MEMORY, THIS IS A LIST OF ALL CONVERSION ROUTINES
 IN <from_type> "2" <to_type> FORMAT
 """
+
+
 def value2json(obj, pretty=False, sort_keys=False):
     try:
         json = json_encoder(obj, pretty=pretty)
@@ -276,7 +278,7 @@ def list2table(rows, column_names=None):
             columns |= set(r.keys())
         keys = list(columns)
 
-    output = [[unwraplist(r[k]) for k in keys] for r in rows]
+    output = [[unwraplist(r.get(k)) for k in keys] for r in rows]
 
     return wrap({
         "meta": {"format": "table"},
@@ -308,7 +310,7 @@ def list2cube(rows, column_names=None):
 
     for r in rows:
         for k in keys:
-            data[k].append(r[k])
+            data[k].append(unwraplist(r[k]))
 
     return output
 
@@ -476,7 +478,10 @@ def bytes2hex(value, separator=" "):
 
 
 def base642bytearray(value):
-    return bytearray(base64.b64decode(value))
+    if value == None:
+        return bytearray(b"")
+    else:
+        return bytearray(base64.b64decode(value))
 
 
 def base642bytes(value):
@@ -484,6 +489,8 @@ def base642bytes(value):
 
 
 def bytes2base64(value):
+    if isinstance(value, bytearray):
+        value=str(value)
     return base64.b64encode(value).decode("utf8")
 
 

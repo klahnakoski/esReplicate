@@ -16,8 +16,9 @@ import math
 import re
 from datetime import datetime, date, timedelta
 from decimal import Decimal
+from time import time as _time
 
-from pyLibrary.maths import Math
+_utcnow = datetime.utcnow
 
 try:
     import pytz
@@ -25,6 +26,7 @@ except Exception:
     pass
 
 from pyLibrary.dot import Null
+from pyLibrary.maths import Math
 from pyLibrary.times.durations import Duration, MILLI_VALUES
 from pyLibrary.vendor.dateutil.parser import parse as parse_date
 from pyLibrary.strings import deformat
@@ -53,14 +55,17 @@ class Date(object):
     def floor(self, duration=None):
         if duration is None:  # ASSUME DAY
             return unix2Date(math.floor(self.unix / 86400) * 86400)
+        elif duration.month:
+            dt = unix2datetime(self.unix)
+            month = int(math.floor((dt.year*12+dt.month-1) / duration.month) * duration.month)
+            year = int(math.floor(month/12))
+            month -= 12*year
+            return Date(datetime(year, month+1, 1))
         elif duration.milli % (7 * 86400000) == 0:
             offset = 4*86400
             return unix2Date(math.floor((self.unix + offset) / duration.seconds) * duration.seconds - offset)
-        elif not duration.month:
-            return unix2Date(math.floor(self.unix / duration.seconds) * duration.seconds)
         else:
-            month = int(math.floor(self.value.month / duration.month) * duration.month)
-            return Date(datetime(self.value.year, month, 1))
+            return unix2Date(math.floor(self.unix / duration.seconds) * duration.seconds)
 
     def format(self, format="%Y-%m-%d %H:%M:%S"):
         try:
@@ -75,7 +80,7 @@ class Date(object):
         return self.unix*1000
 
     def addDay(self):
-        return Date(self.value + timedelta(days=1))
+        return Date(unix2datetime(self.unix) + timedelta(days=1))
 
     def add(self, other):
         if other==None:
@@ -109,7 +114,14 @@ class Date(object):
 
     @staticmethod
     def now():
-        return unix2Date(datetime2unix(datetime.utcnow()))
+        candidate = _time()
+        temp = _utcnow()
+        unix = datetime2unix(temp)
+        if abs(candidate - unix) > 0.1:
+            from pyLibrary.debugs.logs import Log
+
+            Log.warning("_time() and _utcnow() is off by {{amount}}", amount=unix - candidate)
+        return unix2Date(datetime2unix(temp))
 
     @staticmethod
     def eod():
@@ -120,7 +132,7 @@ class Date(object):
 
     @staticmethod
     def today():
-        return unix2Date(math.floor(datetime2unix(datetime.utcnow()) / 86400) * 86400)
+        return unix2Date(math.floor(datetime2unix(_utcnow()) / 86400) * 86400)
 
     @staticmethod
     def range(min, max, interval):
@@ -326,11 +338,11 @@ def unicode2Date(value, format=None):
 
     value = value.strip()
     if value.lower() == "now":
-        return unix2Date(datetime2unix(datetime.utcnow()))
+        return unix2Date(datetime2unix(_utcnow()))
     elif value.lower() == "today":
-        return unix2Date(math.floor(datetime2unix(datetime.utcnow()) / 86400) * 86400)
+        return unix2Date(math.floor(datetime2unix(_utcnow()) / 86400) * 86400)
     elif value.lower() in ["eod", "tomorrow"]:
-        return unix2Date(math.floor(datetime2unix(datetime.utcnow()) / 86400) * 86400 + 86400)
+        return unix2Date(math.floor(datetime2unix(_utcnow()) / 86400) * 86400 + 86400)
 
     if any(value.lower().find(n) >= 0 for n in ["now", "today", "eod", "tomorrow"] + list(MILLI_VALUES.keys())):
         return parse_time_expression(value)
