@@ -150,7 +150,7 @@ class Queue(object):
         wait_time = 5 * SECOND
 
         now = Date.now()
-        if timeout!=None:
+        if timeout != None:
             time_to_stop_waiting = now + timeout
         else:
             time_to_stop_waiting = None

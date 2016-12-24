@@ -271,6 +271,8 @@ def replicate(source, destination, pending_ids, fixes, please_stop):
                     pass
                 elif "can not find branch" in e:
                     pass
+                elif tree == "try" in e:
+                    pass
                 else:
                     Log.warning("not evaluated {{expression}}", expression=f, cause=e)
 

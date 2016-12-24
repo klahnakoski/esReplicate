@@ -21,7 +21,6 @@
 	},
 	"destination": {
 		"host": "http://activedata.allizom.org",
-//		"host": "http://localhost",
 		"port": 9200,
 		"index": "orange_factor",
 		"type": "bug_info",
@@ -36,8 +35,7 @@
 	"constants": {
 		"pyLibrary.env.http.default_headers": {
 			"Referer": "https://wiki.mozilla.org/Auto-tools/Projects/OrangeFactor#ActiveData"
-		},
-		"pyLibrary.env.http.USE_COMPRESSION": false
+		}
 	},
 	"debug": {
 		"log": [
