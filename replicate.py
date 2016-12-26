@@ -231,7 +231,7 @@ def diff(source, destination, pending, please_stop):
 
                 if source_count.hits.total == dest_count.hits.total:
                     return
-                else:
+                elif source_count.hits.total < 200000:
                     num_mismatches[0] += 1
 
             if source_count.hits.total < 200000:
