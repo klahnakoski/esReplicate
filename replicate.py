@@ -352,7 +352,10 @@ def main():
         pending_thread.join()
         diff_thread.join()
         pending.add(Thread.STOP)
-        replication_thread.join()
+        try:
+            replication_thread.join()
+        except Exception, e:
+            Log.warning("Replication thread failed", cause=e)
         done.go()
         please_stop.go()
 
