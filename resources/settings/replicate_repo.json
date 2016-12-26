@@ -25,8 +25,7 @@
 	"constants": {
 		"pyLibrary.env.http.default_headers": {
 			"Referer": "https://wiki.mozilla.org/Auto-tools/Projects/ActiveData"
-		},
-		"pyLibrary.env.http.USE_COMPRESSION": false
+		}
 	},
 	"debug": {
 		"log": [
