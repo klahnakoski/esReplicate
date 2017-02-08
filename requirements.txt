@@ -1,8 +1,10 @@
 pymysql
 requests
+mo-collections
 mo-dots
 mo-logs
 mo-files
 mo-math
 mo-threads
 mo-times
+mo-json-config

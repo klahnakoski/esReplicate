@@ -16,7 +16,7 @@
 		"type": "revision",
 		"timeout": 300,
 		"schema": {
-			"$ref": "//.../mohg/resources/revision.json"
+			"$ref": "//../schema/revision.json"
 		},
 		"debug": false,
 		"limit_replicas": true,
