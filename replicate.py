@@ -18,7 +18,6 @@ from mo_threads import Queue, Thread, Signal
 from mo_times import Date
 from mo_times.timer import Timer
 
-from mohg.hg_mozilla_org import HgMozillaOrg
 from pyLibrary.env import elasticsearch, http
 from pyLibrary.queries import jx
 
@@ -373,8 +372,6 @@ def start():
         config = startup.read_settings()
         constants.set(config.constants)
         Log.start(config.debug)
-        if config.hg:
-            hg = HgMozillaOrg(config.hg)
         main()
     except Exception, e:
         Log.error("Problems exist", e)
