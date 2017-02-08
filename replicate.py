@@ -10,19 +10,17 @@
 
 from datetime import timedelta, datetime
 
-from pyLibrary.collections import MAX
-from pyLibrary.debugs import startup, constants
-from pyLibrary.debugs.logs import Log
-from pyLibrary.dot import wrap, unwraplist, literal_field
-from pyLibrary.env import elasticsearch, http
-from pyLibrary.env.files import File
-from pyLibrary.maths import Math
-from pyLibrary.queries import jx
-from pyLibrary.thread.threads import Queue, Thread, Signal
-from pyLibrary.times.dates import Date
-from pyLibrary.times.timer import Timer
+from mo_dots import wrap, unwraplist, literal_field
+from mo_files import File
+from mo_logs import startup, constants, Log
+from mo_math import Math, MAX
+from mo_threads import Queue, Thread, Signal
+from mo_times import Date
+from mo_times.timer import Timer
 
 from mohg.hg_mozilla_org import HgMozillaOrg
+from pyLibrary.env import elasticsearch, http
+from pyLibrary.queries import jx
 
 # REPLICATION
 #
@@ -243,10 +241,8 @@ def diff(source, destination, pending, please_stop):
                 _partition(min_, mid_)
             else:
                 Log.error("can not split alphabetical in half")
-
-
         except Exception, e:
-            Log.warning("Scanning had a problem", cause=e)
+            Log.error("Scanning had a problem", cause=e)
 
     try:
         _partition(_min, _max)
@@ -351,7 +347,7 @@ def main():
         )
         pending_thread.join()
         diff_thread.join()
-        pending.add(Thread.STOP)
+        pending.add(THREAD_STOP)
         try:
             replication_thread.join()
         except Exception, e:
