@@ -10,19 +10,17 @@
 
 from datetime import timedelta, datetime
 
-from pyLibrary.collections import MAX
-from pyLibrary.debugs import startup, constants
-from pyLibrary.debugs.logs import Log
-from pyLibrary.dot import wrap, unwraplist, literal_field
-from pyLibrary.env import elasticsearch, http
-from pyLibrary.env.files import File
-from pyLibrary.maths import Math
-from pyLibrary.queries import jx
-from pyLibrary.thread.threads import Queue, Thread, Signal
-from pyLibrary.times.dates import Date
-from pyLibrary.times.timer import Timer
+from mo_dots import wrap, unwraplist, literal_field
+from mo_files import File
+from mo_logs import startup, constants, Log
+from mo_math import Math, MAX
+from mo_threads import Queue, Thread, Signal, THREAD_STOP
+from mo_times import Date
+from mo_times.timer import Timer
 
-from mohg.hg_mozilla_org import HgMozillaOrg
+from mo_hg.hg_mozilla_org import HgMozillaOrg
+from pyLibrary.env import elasticsearch, http
+from pyLibrary.queries import jx
 
 # REPLICATION
 #
@@ -205,7 +203,12 @@ def diff(source, destination, pending, please_stop):
             if missing:
                 pending.extend(missing)
         except Exception, e:
-            Log.warning("Scanning had a problem", cause=e)
+            if min_ + 1 == max_:
+                Log.warning("Scanning had a with field {{value||quote}} problem", value=min_, cause=e)
+            else:
+                mid_ = Math.round((min_+max_)/2, decimal=0)
+                _copy(min_, mid_)
+                _copy(mid_, max_)
 
     num_mismatches = [0]  # TRACK NUMBER OF MISMATCHES DURING REPLICATION
 
@@ -243,10 +246,8 @@ def diff(source, destination, pending, please_stop):
                 _partition(min_, mid_)
             else:
                 Log.error("can not split alphabetical in half")
-
-
         except Exception, e:
-            Log.warning("Scanning had a problem", cause=e)
+            Log.error("Scanning had a problem", cause=e)
 
     try:
         _partition(_min, _max)
@@ -321,51 +322,46 @@ def main():
     please_stop = Signal()
     done = Signal()
 
-    def worker(please_stop):
-        pending = Queue("pending ids", max=BATCH_SIZE*3, silent=False)
+    pending = Queue("pending ids", max=BATCH_SIZE*3, silent=False)
 
-        pending_thread = Thread.run(
-            "get pending",
-            get_pending,
-            source=source,
-            since=last_updated,
-            pending_bugs=pending,
-            please_stop=please_stop
-        )
-        diff_thread = Thread.run(
-            "diff",
-            diff,
-            source,
-            destination,
-            pending,
-            please_stop=please_stop
-        )
-        replication_thread = Thread.run(
-            "replication",
-            replicate,
-            source,
-            destination,
-            pending,
-            config.fix,
-            please_stop=please_stop
-        )
-        pending_thread.join()
-        diff_thread.join()
-        pending.add(Thread.STOP)
-        try:
-            replication_thread.join()
-        except Exception, e:
-            Log.warning("Replication thread failed", cause=e)
-        done.go()
-        please_stop.go()
+    pending_thread = Thread.run(
+        "get pending",
+        get_pending,
+        source=source,
+        since=last_updated,
+        pending_bugs=pending,
+        please_stop=please_stop
+    )
+    diff_thread = Thread.run(
+        "diff",
+        diff,
+        source,
+        destination,
+        pending,
+        please_stop=please_stop
+    )
+    replication_thread = Thread.run(
+        "replication",
+        replicate,
+        source,
+        destination,
+        pending,
+        config.fix,
+        please_stop=please_stop
+    )
+    pending_thread.join()
+    diff_thread.join()
+    pending.add(THREAD_STOP)
+    try:
+        replication_thread.join()
+    except Exception, e:
+        Log.warning("Replication thread failed", cause=e)
+    done.go()
+    please_stop.go()
 
-    Thread.run("wait for replication to finish", worker, please_stop=please_stop)
-    Thread.wait_for_shutdown_signal(please_stop=please_stop)
-
-    if done:
-        Log.note("done all")
-        # RECORD LAST UPDATED< IF WE DID NOT CANCEL OUT
-        time_file.write(unicode(current_time.milli))
+    Log.note("done all")
+    # RECORD LAST UPDATED, IF WE DID NOT CANCEL OUT
+    time_file.write(unicode(current_time.milli))
 
 
 def start():
@@ -375,11 +371,12 @@ def start():
 
     try:
         config = startup.read_settings()
-        constants.set(config.constants)
-        Log.start(config.debug)
-        if config.hg:
-            hg = HgMozillaOrg(config.hg)
-        main()
+        with startup.SingleInstance(config.args.filename):
+            constants.set(config.constants)
+            Log.start(config.debug)
+            if config.hg:
+                hg = HgMozillaOrg(config.hg)
+            main()
     except Exception, e:
         Log.warning("Problems exist", e)
     finally:

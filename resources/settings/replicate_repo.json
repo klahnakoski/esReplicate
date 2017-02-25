@@ -10,13 +10,13 @@
 		"debug": false
 	},
 	"destination": {
-		"host": "http://localhost",
+		"host": "http://klahnakoski-es.corp.tor1.mozilla.com",
 		"port": 9200,
 		"index": "repo",
 		"type": "revision",
 		"timeout": 300,
 		"schema": {
-			"$ref": "//.../mohg/resources/revision.json"
+			"$ref": "//../schema/revision.json"
 		},
 		"debug": false,
 		"limit_replicas": true,
@@ -45,7 +45,7 @@
 				"$ref": "file://~/private.json#aws_credentials",
 				"from_address": "klahnakoski@mozilla.com",
 				"to_address": "klahnakoski@mozilla.com",
-				"subject": "[ALERT][Toronto] Problem in replicate_repo",
+				"subject": "[ALERT][Toronto] Problem in replicate_repo"
 
 
 			}

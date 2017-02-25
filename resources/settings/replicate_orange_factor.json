@@ -7,10 +7,10 @@
 		"starttime":"float(starttime)",
 		"timestamp":"float(timestamp)",
 		"date":"Date(date).unix",
-		"push_date":"wrap(hg.get_revision(wrap({\"changeset\":{\"id\":rev}, \"branch\":{\"name\": tree.split('/')[-1]}}))).push.date"
+		"push_date":"wrap(hg.get_revision(wrap({\"changeset\":{\"id\":rev}, \"branch\":{\"name\": tree.strip('/').split('/')[-1]}}))).push.date"
 	},
 	"hg":{
-		"$ref":"//../../mohg/resources/settings.json"
+		"$ref":"//../../mo_hg/resources/settings.json"
 	},
 	"source": {
 		"host": "http://of-elasticsearch-zlb.webapp.scl3.mozilla.com",
@@ -51,12 +51,11 @@
 				"encoding" : "utf8"
 			},
 			{
-				"log_type": "ses", "$ref": "file://~/private.json#aws_credentials",
+				"log_type": "ses",
 				"from_address": "klahnakoski@mozilla.com",
 				"to_address": "klahnakoski@mozilla.com",
 				"subject": "[ALERT][Toronto] Problem in replicate_orange_factor",
-
-
+				"$ref": "file://~/private.json#aws_credentials"
 			}
 		]
 	}
