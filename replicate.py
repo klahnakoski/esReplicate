@@ -381,7 +381,7 @@ def start():
             hg = HgMozillaOrg(config.hg)
         main()
     except Exception, e:
-        Log.error("Problems exist", e)
+        Log.warning("Problems exist", e)
     finally:
         Log.stop()
 
