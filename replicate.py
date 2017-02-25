@@ -202,7 +202,12 @@ def diff(source, destination, pending, please_stop):
             if missing:
                 pending.extend(missing)
         except Exception, e:
-            Log.warning("Scanning had a problem", cause=e)
+            if min_ + 1 == max_:
+                Log.warning("Scanning had a with field {{value||quote}} problem", value=min_, cause=e)
+            else:
+                mid_ = Math.round((min_+max_)/2, decimal=0)
+                _copy(min_, mid_)
+                _copy(mid_, max_)
 
     num_mismatches = [0]  # TRACK NUMBER OF MISMATCHES DURING REPLICATION
 
