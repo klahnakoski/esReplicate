@@ -14,7 +14,7 @@ from mo_dots import wrap, unwraplist, literal_field
 from mo_files import File
 from mo_logs import startup, constants, Log
 from mo_math import Math, MAX
-from mo_threads import Queue, Thread, Signal
+from mo_threads import Queue, Thread, Signal, THREAD_STOP
 from mo_times import Date
 from mo_times.timer import Timer
 
@@ -321,51 +321,46 @@ def main():
     please_stop = Signal()
     done = Signal()
 
-    def worker(please_stop):
-        pending = Queue("pending ids", max=BATCH_SIZE*3, silent=False)
+    pending = Queue("pending ids", max=BATCH_SIZE*3, silent=False)
 
-        pending_thread = Thread.run(
-            "get pending",
-            get_pending,
-            source=source,
-            since=last_updated,
-            pending_bugs=pending,
-            please_stop=please_stop
-        )
-        diff_thread = Thread.run(
-            "diff",
-            diff,
-            source,
-            destination,
-            pending,
-            please_stop=please_stop
-        )
-        replication_thread = Thread.run(
-            "replication",
-            replicate,
-            source,
-            destination,
-            pending,
-            config.fix,
-            please_stop=please_stop
-        )
-        pending_thread.join()
-        diff_thread.join()
-        pending.add(THREAD_STOP)
-        try:
-            replication_thread.join()
-        except Exception, e:
-            Log.warning("Replication thread failed", cause=e)
-        done.go()
-        please_stop.go()
+    pending_thread = Thread.run(
+        "get pending",
+        get_pending,
+        source=source,
+        since=last_updated,
+        pending_bugs=pending,
+        please_stop=please_stop
+    )
+    diff_thread = Thread.run(
+        "diff",
+        diff,
+        source,
+        destination,
+        pending,
+        please_stop=please_stop
+    )
+    replication_thread = Thread.run(
+        "replication",
+        replicate,
+        source,
+        destination,
+        pending,
+        config.fix,
+        please_stop=please_stop
+    )
+    pending_thread.join()
+    diff_thread.join()
+    pending.add(THREAD_STOP)
+    try:
+        replication_thread.join()
+    except Exception, e:
+        Log.warning("Replication thread failed", cause=e)
+    done.go()
+    please_stop.go()
 
-    Thread.run("wait for replication to finish", worker, please_stop=please_stop)
-    Thread.wait_for_shutdown_signal(please_stop=please_stop)
-
-    if done:
-        Log.note("done all")
-        # RECORD LAST UPDATED< IF WE DID NOT CANCEL OUT
-        time_file.write(unicode(current_time.milli))
+    Log.note("done all")
+    # RECORD LAST UPDATED, IF WE DID NOT CANCEL OUT
+    time_file.write(unicode(current_time.milli))
 
 
 def start():
@@ -375,11 +370,12 @@ def start():
 
     try:
         config = startup.read_settings()
-        constants.set(config.constants)
-        Log.start(config.debug)
-        main()
+        with startup.SingleInstance(config.args.filename):
+            constants.set(config.constants)
+            Log.start(config.debug)
+            main()
     except Exception, e:
-        Log.error("Problems exist", e)
+        Log.warning("Problems exist", e)
     finally:
         Log.stop()
 
