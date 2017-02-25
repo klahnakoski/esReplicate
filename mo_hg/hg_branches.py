@@ -19,7 +19,7 @@ from mo_math import MAX
 from mo_times.dates import Date
 from mo_times.durations import SECOND, DAY
 
-from mohg.hg_mozilla_org import DEFAULT_LOCALE
+from mo_hg.hg_mozilla_org import DEFAULT_LOCALE
 from pyLibrary.env import elasticsearch, http
 
 EXTRA_WAIT_TIME = 20 * SECOND  # WAIT TIME TO SEND TO AWS, IF WE wait_forever

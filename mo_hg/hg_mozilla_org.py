@@ -23,9 +23,9 @@ from mo_threads import Till
 from mo_times.dates import Date
 from mo_times.durations import SECOND, Duration, HOUR
 
-from mohg.repos.changesets import Changeset
-from mohg.repos.pushs import Push
-from mohg.repos.revisions import Revision
+from mo_hg.repos.changesets import Changeset
+from mo_hg.repos.pushs import Push
+from mo_hg.repos.revisions import Revision
 from pyLibrary import convert
 from pyLibrary.env import http, elasticsearch
 from pyLibrary.meta import cache
@@ -39,8 +39,8 @@ def _late_imports():
     global _hg_branches
     global _OLD_BRANCH
 
-    from mohg import hg_branches as _hg_branches
-    from mohg.hg_branches import OLD_BRANCH as _OLD_BRANCH
+    from mo_hg import hg_branches as _hg_branches
+    from mo_hg.hg_branches import OLD_BRANCH as _OLD_BRANCH
 
     _ = _hg_branches
     _ = _OLD_BRANCH
