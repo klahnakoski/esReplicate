@@ -16,7 +16,7 @@
 		"type": "code_coverage",
 		"timeout": 300,
 		"schema": {
-			"$ref": "//~/code/Activedata-ETL/resources/schema/code_coverage.json"
+			"$ref": "//../schema/code_coverage.json"
 		},
 		"debug": false,
 		"limit_replicas": false,
