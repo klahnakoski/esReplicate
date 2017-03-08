@@ -10,7 +10,7 @@
 		"debug": false
 	},
 	"destination": {
-		"host": "http://klahnakoski-es.corp.tor1.mozilla.com",
+		"host": "http://localhost",
 		"port": 9200,
 		"index": "repo",
 		"type": "revision",

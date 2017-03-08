@@ -5,12 +5,12 @@
 	"source": {
 		"host": "http://activedata.allizom.org",
 		"port": 9200,
-		"index": "coverage-summary20160810_121806",
+		"index": "coverage-summary",
 		"type": "code_coverage",
 		"debug": false
 	},
 	"destination": {
-		"host": "http://activedata.allizom.org",
+		"host": "http://localhost",
 		"port": 9200,
 		"index": "coverage-summary",
 		"type": "code_coverage",
