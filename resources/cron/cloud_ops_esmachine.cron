@@ -1,1 +1,4 @@
+1,11,21,31,41,51 * * * * /home/klahnakoski/esReplicate/resources/scripts/replicate_saved_queries.sh
+2,12,22,32,42,52 * * * * /home/klahnakoski/esReplicate/resources/scripts/replicate_repo.sh
 3,13,23,33,43,53 * * * * /home/klahnakoski/esReplicate/resources/scripts/replicate_orange_factor.sh
+8 6 * * * /home/klahnakoski/hierarchy/resources/scripts/hierarchy.sh

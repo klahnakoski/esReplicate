@@ -62,8 +62,31 @@ sudo -i
 exit
 
 
+# INSTALL HIERARCHY ETL
+cd ~
+git clone https://github.com/klahnakoski/MoDevETL.git hierarchy
+cd ~/hierarchy
+git checkout hierarchy
+sudo pip install -r requirements.txt
+
+# INSTALL REVIEW ETL
+cd ~
+git clone https://github.com/klahnakoski/MoDevETL.git review
+cd ~/review
+git checkout review
+sudo pip install -r requirements.txt
+
+
+
+
+
+
+
 # SETUP CRON JOBS
 chmod u+x /home/klahnakoski/esReplicate/resources/scripts/replicate_orange_factor.sh
+chmod u+x /home/klahnakoski/esReplicate/resources/scripts/replicate_repo.sh
+chmod u+x /home/klahnakoski/esReplicate/resources/scripts/replicate_saved_queries.sh
+chmod u+x /home/klahnakoski/hierarchy/resources/scripts/hierarchy.sh
 
 
 # CRON FILE (TURN "OFF" AND "ON", RESPECTIVLY)

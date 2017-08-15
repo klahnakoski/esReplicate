@@ -42,11 +42,8 @@
 				"encoding" : "utf8"
 			},
 			{
-				"log_type": "ses",
-				"$ref": "file://~/private.json#aws_credentials",
-				"from_address": "klahnakoski@mozilla.com",
-				"to_address": "klahnakoski@mozilla.com",
-				"subject": "[ALERT][Toronto] Problem in replicate_saved_queries"
+				"subject": "[ALERT][Toronto] Problem in replicate_saved_queries",
+				"$ref": "email.json"
 			}
 		]
 	}
