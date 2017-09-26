@@ -7,9 +7,13 @@
 #
 # Author: Kyle Lahnakoski (kyle@lahnakoski.com)
 #
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import unicode_literals
 
 from datetime import timedelta, datetime
 
+from future.utils import text_type
 from mo_dots import wrap, unwraplist, literal_field
 from mo_files import File
 from mo_logs import startup, constants, Log
@@ -52,7 +56,7 @@ def get_last_updated(es):
         elif Math.is_integer(max_):
             max_ = int(max_)
         return max_
-    except Exception, e:
+    except Exception as e:
         Log.warning("Can not get_last_updated from {{host}}/{{index}}", {
             "host": es.settings.host,
             "index": es.settings.index
@@ -202,7 +206,7 @@ def diff(source, destination, pending, please_stop):
 
             if missing:
                 pending.extend(missing)
-        except Exception, e:
+        except Exception as e:
             if min_ + 1 == max_:
                 Log.warning("Scanning had a with field {{value||quote}} problem", value=min_, cause=e)
             else:
@@ -246,7 +250,7 @@ def diff(source, destination, pending, please_stop):
                 _partition(min_, mid_)
             else:
                 Log.error("can not split alphabetical in half")
-        except Exception, e:
+        except Exception as e:
             Log.error("Scanning had a problem", cause=e)
 
     try:
@@ -267,7 +271,7 @@ def replicate(source, destination, pending_ids, fixes, please_stop):
         for k, f in fixes.items():
             try:
                 _source[k] = eval(f)
-            except Exception, e:
+            except Exception as e:
                 if "Problem pulling pushlog" in e:
                     pass
                 elif "can not find branch" in e:
@@ -354,14 +358,14 @@ def main():
     pending.add(THREAD_STOP)
     try:
         replication_thread.join()
-    except Exception, e:
+    except Exception as e:
         Log.warning("Replication thread failed", cause=e)
     done.go()
     please_stop.go()
 
     Log.note("done all")
     # RECORD LAST UPDATED, IF WE DID NOT CANCEL OUT
-    time_file.write(unicode(current_time.milli))
+    time_file.write(text_type(current_time.milli))
 
 
 def start():
@@ -377,7 +381,7 @@ def start():
             if config.hg:
                 hg = HgMozillaOrg(config.hg)
             main()
-    except Exception, e:
+    except Exception as e:
         Log.warning("Problems exist", e)
     finally:
         Log.stop()

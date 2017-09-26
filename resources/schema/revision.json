@@ -1,24 +1,42 @@
+// A COPY FROM mo_hg.repos.revisions.py
 {
 	"settings": {
 		"index.number_of_replicas": 1,
-		"index.number_of_shards": 3
+		"index.number_of_shards": 6,
+		"analysis": {
+			"analyzer": {
+				"description_limit": {
+					"type": "custom",
+					"tokenizer": "keyword",
+					"filter": [
+						"lowercase",
+						"asciifolding",
+						{
+							"type": "limit",
+							"max": 100,
+							"min": 5
+						}
+					]
+				}
+			}
+		}
 	},
 	"mappings": {
 		"revision": {
 			"_source": {
 				"compress": false
 			},
-			"_id" : {
+			"_id": {
 				"index": "not_analyzed",
 				"type": "string",
 				"store": true
-	        },
+			},
 			"_all": {
 				"enabled": false
 			},
 			"_routing": {
 				"required": true,
-				"path":"changeset.id12"
+				"path": "changeset.id12"
 			},
 			"dynamic_templates": [
 				{
@@ -56,17 +74,54 @@
 				}
 			],
 			"properties": {
-				"changeset":{
-					"type":"object",
-					"properties":{
+				"changeset": {
+					"type": "object",
+					"properties": {
 						"description": {
-				            "index": "analyzed",
-				            "type": "string"
-				        }
+							"index": "analyzed",
+							"type": "string",
+							"fields": {
+								"raw": {
+									"type": "string",
+									"analyzer": "description_limit"
+								}
+							}
+						},
+						"diff": {
+							"type": "nested",
+							"dynamic": true,
+							"properties": {
+								"changes": {
+									"type": "nested",
+									"dynamic": true,
+									"properties": {
+										"new": {
+											"type": "object",
+											"dynamic": true,
+											"properties": {
+												"content": {
+													"type": "string",
+													"index": "no"
+												}
+											}
+										},
+										"old": {
+											"type": "object",
+											"dynamic": true,
+											"properties": {
+												"content": {
+													"type": "string",
+													"index": "no"
+												}
+											}
+										}
+									}
+								}
+							}
+						}
 					}
 				}
 			}
 		}
 	}
-
 }
