@@ -282,18 +282,21 @@ def replicate(source, destination, pending_ids, fixes, please_stop):
         return _source
 
     for g, docs in jx.groupby(pending_ids, max_size=BATCH_SIZE):
-        with Timer("Replicate {{num_docs}} documents", {"num_docs": len(docs)}):
-            data = source.search({
-                "query": {"filtered": {
-                    "query": {"match_all": {}},
-                    "filter": {"terms": {"_id": set(docs)}}
-                }},
-                "from": 0,
-                "size": 200000,
-                "sort": []
-            })
+        try:
+            with Timer("Replicate {{num_docs}} documents", {"num_docs": len(docs)}):
+                data = source.search({
+                    "query": {"filtered": {
+                        "query": {"match_all": {}},
+                        "filter": {"terms": {"_id": set(docs)}}
+                    }},
+                    "from": 0,
+                    "size": 200000,
+                    "sort": []
+                })
 
-            destination.extend([{"id": h._id, "value": fixer(h._source)} for h in data.hits.hits])
+                destination.extend([{"id": h._id, "value": fixer(h._source)} for h in data.hits.hits])
+        except Exception as e:
+            Log.warning("could not replicate batch", cause=e)
 
         if please_stop:
             break
