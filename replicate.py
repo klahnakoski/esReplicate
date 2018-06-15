@@ -35,7 +35,8 @@ from pyLibrary.queries import jx
 # 4) The replicate's exclusivity increases availability (Mozilla's public cluster may have time of high load)
 
 far_back = datetime.utcnow() - timedelta(weeks=52)
-BATCH_SIZE = 1000
+INSERT_BATCH_SIZE = 1
+SCAN_BATCH_SIZE = 50000
 http.ZIP_REQUEST = False
 hg = None
 config = None
@@ -78,7 +79,7 @@ def get_pending(source, since, pending_bugs, please_stop):
                         }},
                     "fields": ["_id", config.primary_field],
                     "from": 0,
-                    "size": BATCH_SIZE,
+                    "size": INSERT_BATCH_SIZE,
                     "sort": [config.primary_field]
                 })
             else:
@@ -94,7 +95,7 @@ def get_pending(source, since, pending_bugs, please_stop):
                     }},
                     "fields": ["_id", config.primary_field],
                     "from": 0,
-                    "size": BATCH_SIZE,
+                    "size": INSERT_BATCH_SIZE,
                     "sort": [config.primary_field]
                 })
 
@@ -116,7 +117,7 @@ def get_pending(source, since, pending_bugs, please_stop):
                 elif Math.is_number(new_max_value):
                     since = float(new_max_value) + 0.5
                 else:
-                    since = unicode(new_max_value) + "a"
+                    since = text_type(new_max_value) + "a"
             else:
                 since = new_max_value
 
@@ -124,11 +125,11 @@ def get_pending(source, since, pending_bugs, please_stop):
             Log.note("Adding {{num}} to pending queue", num=len(ids))
             pending_bugs.extend(ids)
 
-            if len(result.hits.hits) < BATCH_SIZE:
+            if len(result.hits.hits) < INSERT_BATCH_SIZE:
                 break
 
         Log.note("No more ids")
-    except Exception, e:
+    except Exception as e:
         please_stop.go()
         Log.error("Problem while copying records", cause=e)
 
@@ -179,7 +180,7 @@ def diff(source, destination, pending, please_stop):
                 }},
                 "fields": ["_id"],
                 "from": 0,
-                "size": 200000
+                "size": SCAN_BATCH_SIZE
             })
             source_ids = set(source_result.hits.hits._id)
 
@@ -190,7 +191,7 @@ def diff(source, destination, pending, please_stop):
                 }},
                 "fields": ["_id"],
                 "from": 0,
-                "size": 200000
+                "size": SCAN_BATCH_SIZE
             })
             destination_ids = set(destination_result.hits.hits._id)
 
@@ -238,10 +239,10 @@ def diff(source, destination, pending, please_stop):
 
                 if source_count.hits.total == dest_count.hits.total:
                     return
-                elif source_count.hits.total < 200000:
+                elif source_count.hits.total < SCAN_BATCH_SIZE:
                     num_mismatches[0] += 1
 
-            if source_count.hits.total < 200000:
+            if source_count.hits.total < SCAN_BATCH_SIZE:
                 _copy(min_, max_)
             elif Math.is_number(min_) and Math.is_number(max_):
                 mid_ = int(round((float(min_) + float(max_)) / 2, 0))
@@ -281,7 +282,7 @@ def replicate(source, destination, pending_ids, fixes, please_stop):
 
         return _source
 
-    for g, docs in jx.groupby(pending_ids, max_size=BATCH_SIZE):
+    for g, docs in jx.groupby(pending_ids, max_size=INSERT_BATCH_SIZE):
         try:
             with Timer("Replicate {{num_docs}} documents", {"num_docs": len(docs)}):
                 data = source.search({
@@ -290,7 +291,7 @@ def replicate(source, destination, pending_ids, fixes, please_stop):
                         "filter": {"terms": {"_id": set(docs)}}
                     }},
                     "from": 0,
-                    "size": 200000,
+                    "size": SCAN_BATCH_SIZE,
                     "sort": []
                 })
 
@@ -305,7 +306,7 @@ def replicate(source, destination, pending_ids, fixes, please_stop):
 
 
 def main():
-    global BATCH_SIZE
+    global INSERT_BATCH_SIZE
 
     current_time = Date.now()
     time_file = File(config.last_replication_time)
@@ -321,7 +322,7 @@ def main():
         last_updated = get_last_updated(destination)
 
     if config.batch_size:
-        BATCH_SIZE = config.batch_size
+        INSERT_BATCH_SIZE = config.batch_size
 
     Log.note("updating records with {{primary_field}}>={{last_updated}}", last_updated=last_updated,
              primary_field=config.primary_field)
@@ -329,7 +330,7 @@ def main():
     please_stop = Signal()
     done = Signal()
 
-    pending = Queue("pending ids", max=BATCH_SIZE*3, silent=False)
+    pending = Queue("pending ids", max=INSERT_BATCH_SIZE * 3, silent=False)
 
     pending_thread = Thread.run(
         "get pending",
