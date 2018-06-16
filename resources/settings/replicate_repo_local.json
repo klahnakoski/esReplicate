@@ -1,0 +1,40 @@
+{
+	"primary_field": "changeset.date",
+	"primary_interval": 500000,
+	"last_replication_time": "./results/data/repo_last_replication_time.txt",
+	"source": {
+		"host": "http://localhost",
+		"port": 9201,
+		"index": "repo",
+		"type": "revision",
+		"debug": false,
+		"tjson": true
+	},
+	"destination": {
+		"host": "http://localhost",
+		"port": 9200,
+		"index": "repo",
+		"type": "revision",
+		"timeout": 300,
+		"schema": {
+			"$ref": "//../schema/revision.json"
+		},
+		"debug": false,
+		"limit_replicas": true,
+		"tjson": false,
+		"zip": false
+	},
+	"constants": {
+		"pyLibrary.env.http.default_headers": {
+			"Referer": "https://wiki.mozilla.org/Auto-tools/Projects/ActiveData"
+		}
+	},
+	"debug": {
+		"log": [
+			{
+				"log_type": "stream",
+				"stream": "sys.stdout"
+			}
+		]
+	}
+}

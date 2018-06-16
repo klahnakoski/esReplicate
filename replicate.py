@@ -13,24 +13,21 @@ from __future__ import unicode_literals
 
 from datetime import timedelta, datetime
 
-from future.utils import text_type
-from mo_dots import wrap, unwraplist, literal_field
+import jx_elasticsearch
+from jx_python import jx
+from mo_dots import wrap
 from mo_files import File
+from mo_future import text_type
 from mo_logs import startup, constants, Log
 from mo_math import Math, MAX
 from mo_threads import Queue, Thread, Signal, THREAD_STOP
-from mo_times import Date
-from mo_times.timer import Timer
-
-from mo_hg.hg_mozilla_org import HgMozillaOrg
+from mo_times import Date, Timer
 from pyLibrary.env import elasticsearch, http
-from pyLibrary.queries import jx
 
 # REPLICATION
 #
 # Replication has a few benefits:
-# 1) The replicate can have scripting enabled, allowing more powerful set of queries
-# 2) Physical proximity increases latency
+# 2) Physical proximity decreases latency
 # 3) The replicate can be configured with better hardware
 # 4) The replicate's exclusivity increases availability (Mozilla's public cluster may have time of high load)
 
@@ -38,20 +35,20 @@ far_back = datetime.utcnow() - timedelta(weeks=52)
 INSERT_BATCH_SIZE = 1
 SCAN_BATCH_SIZE = 50000
 http.ZIP_REQUEST = False
-hg = None
 config = None
 
 
 def get_last_updated(es):
     try:
-        results_max = es.search({
-            "query": {"match_all": {}},
-            "from": 0,
-            "size": 1,
-            "sort": {config.primary_field: "desc"}
+        results_max = es.query({
+            "select": [config.primary_field],
+            "from": "repo",
+            "sort": {config.primary_field: "desc"},
+            "limit": 1,
+            "format": "list"
         })
 
-        max_ = results_max.hits.hits[0]._source[config.primary_field]
+        max_ = results_max.data[0][config.primary_field]
         if isinstance(max_, unicode):
             pass
         elif Math.is_integer(max_):
@@ -70,17 +67,13 @@ def get_pending(source, since, pending_bugs, please_stop):
         while not please_stop:
             if since == None:
                 Log.note("Get all records")
-                result = source.search({
-                    # "query": {"match_all": {}},
-                    "query": {
-                        "filtered": {
-                            "filter": {"exists": {"field": config.primary_field}},
-                            "query": {"match_all": {}}
-                        }},
-                    "fields": ["_id", config.primary_field],
-                    "from": 0,
-                    "size": INSERT_BATCH_SIZE,
-                    "sort": [config.primary_field]
+                result = source.query({
+                    "select": ["_id", config.primary_field],
+                    "from": "repo",
+                    "where": {"exists": config.primary_field},
+                    "sort": [config.primary_field],
+                    "limit": INSERT_BATCH_SIZE,
+                    "format": "list"
                 })
             else:
                 Log.note(
@@ -88,29 +81,26 @@ def get_pending(source, since, pending_bugs, please_stop):
                     primary_field=config.primary_field,
                     max_time=since
                 )
-                result = source.search({
-                    "query": {"filtered": {
-                        "query": {"match_all": {}},
-                        "filter": {"range": {config.primary_field: {"gte": since}}},
-                    }},
-                    "fields": ["_id", config.primary_field],
-                    "from": 0,
-                    "size": INSERT_BATCH_SIZE,
-                    "sort": [config.primary_field]
+                result = source.query({
+                    "select": ["_id", config.primary_field],
+                    "from": "repo",
+                    "where": {"gte": {config.primary_field: since}},
+                    "sort": [config.primary_field],
+                    "limit": INSERT_BATCH_SIZE,
+                    "format": "list"
                 })
 
-            new_max_value = MAX([unwraplist(h.fields[literal_field(config.primary_field)]) for h in result.hits.hits])
+            new_max_value = MAX(result.data[config.primary_field])
 
             if since == new_max_value:
                 # GET ALL WITH THIS TIMESTAMP
-                result = source.search({
-                    "query": {"filtered": {
-                        "query": {"match_all": {}},
-                        "filter": {"term": {config.primary_field: since}},
-                    }},
-                    "fields": ["_id", config.primary_field],
-                    "from": 0,
-                    "size": 100000
+                result = source.query({
+                    "select": ["_id", config.primary_field],
+                    "from": "repo",
+                    "where": {"eq": {config.primary_field: since}},
+                    "sort": [config.primary_field],
+                    "limit": 100000,
+                    "format": "list"
                 })
                 if Math.is_integer(new_max_value):
                     since = int(new_max_value) + 1
@@ -121,11 +111,11 @@ def get_pending(source, since, pending_bugs, please_stop):
             else:
                 since = new_max_value
 
-            ids = result.hits.hits._id
+            ids = result.data._id
             Log.note("Adding {{num}} to pending queue", num=len(ids))
             pending_bugs.extend(ids)
 
-            if len(result.hits.hits) < INSERT_BATCH_SIZE:
+            if len(result.data) < INSERT_BATCH_SIZE:
                 break
 
         Log.note("No more ids")
@@ -147,25 +137,19 @@ def diff(source, destination, pending, please_stop):
         return
 
     # FIND source MIN/MAX
-    results_max = source.search({
-        "query": {"match_all": {}},
-        "from": 0,
-        "size": 1,
-        "sort": {config.primary_field: "desc"}
-    })
+    results = source.search({
+        "select": [
+            {"name": "max", "value": config.primary_field, "aggregate": "max"},
+            {"name": "min", "value": config.primary_field, "aggregate": "min"}
+        ],
+        "from": "repo",
+        "format": "list"
+    }).data
 
-    results_min = source.search({
-        "query": {"match_all": {}},
-        "from": 0,
-        "size": 1,
-        "sort": {config.primary_field: "asc"}
-    })
-
-    if results_max.hits.total == 0:
+    if len(results) == 0:
         return
 
-    _min = results_min.hits.hits[0]._source[config.primary_field]
-    _max = results_max.hits.hits[0]._source[config.primary_field]
+    _max, _min = results[0].max, results[0].min
 
     def _copy(min_, max_):
         try:
@@ -173,27 +157,29 @@ def diff(source, destination, pending, please_stop):
                 Log.note("Scanning was aborted")
                 return
 
-            source_result = source.search({
-                "query": {"filtered": {
-                    "query": {"match_all": {}},
-                    "filter": {"range": {config.primary_field: {"gte": min_, "lt": max_}}}
-                }},
-                "fields": ["_id"],
-                "from": 0,
-                "size": SCAN_BATCH_SIZE
+            source_result = source.query({
+                "select": "_id",
+                "from": "repo",
+                "where": {"and": [
+                    {"gte": {config.primary_field: min_}},
+                    {"lt": {config.primary_field: max_}},
+                ]},
+                "limit": SCAN_BATCH_SIZE,
+                "format": "list"
             })
-            source_ids = set(source_result.hits.hits._id)
+            source_ids = set(source_result.data)
 
-            destination_result = destination.search({
-                "query": {"filtered": {
-                    "query": {"match_all": {}},
-                    "filter": {"range": {config.primary_field: {"gte": min_, "lt": max_}}}
-                }},
-                "fields": ["_id"],
-                "from": 0,
-                "size": SCAN_BATCH_SIZE
+            destination_result = destination.query({
+                "select": "_id",
+                "from": "repo",
+                "where": {"and": [
+                    {"gte": {config.primary_field: min_}},
+                    {"lt": {config.primary_field: max_}},
+                ]},
+                "limit": SCAN_BATCH_SIZE,
+                "format": "list"
             })
-            destination_ids = set(destination_result.hits.hits._id)
+            destination_ids = set(destination_result.data)
 
             missing = source_ids - destination_ids
             Log.note(
@@ -211,7 +197,7 @@ def diff(source, destination, pending, please_stop):
             if min_ + 1 == max_:
                 Log.warning("Scanning had a with field {{value||quote}} problem", value=min_, cause=e)
             else:
-                mid_ = Math.round((min_+max_)/2, decimal=0)
+                mid_ = Math.round((min_ + max_) / 2, decimal=0)
                 _copy(min_, mid_)
                 _copy(mid_, max_)
 
@@ -220,29 +206,33 @@ def diff(source, destination, pending, please_stop):
     def _partition(min_, max_):
         try:
             source_count = source.search({
-                "query": {"filtered": {
-                    "query": {"match_all": {}},
-                    "filter": {"range": {config.primary_field: {"gte": min_, "lt": max_}}}
-                }},
-                "size": 0
-            })
+                "select": {"aggregate": "count"},
+                "from": "repo",
+                "where": {"and": [
+                    {"gte": {config.primary_field: min_}},
+                    {"lt": {config.primary_field: max_}},
+                ]},
+                "format": "list"
+            }).data
 
             if num_mismatches[0] < 10:
                 # SOMETIMES THE TWO ARE TOO DIFFERENT TO BE OPTIMISTIC
                 dest_count = destination.search({
-                    "query": {"filtered": {
-                        "query": {"match_all": {}},
-                        "filter": {"range": {config.primary_field: {"gte": min_, "lt": max_}}}
-                    }},
-                    "size": 0
-                })
+                    "select": {"aggregate": "count"},
+                    "from": "repo",
+                    "where": {"and": [
+                        {"gte": {config.primary_field: min_}},
+                        {"lt": {config.primary_field: max_}},
+                    ]},
+                    "format": "list"
+                }).data
 
-                if source_count.hits.total == dest_count.hits.total:
+                if source_count == dest_count:
                     return
-                elif source_count.hits.total < SCAN_BATCH_SIZE:
+                elif source_count < SCAN_BATCH_SIZE:
                     num_mismatches[0] += 1
 
-            if source_count.hits.total < SCAN_BATCH_SIZE:
+            if source_count < SCAN_BATCH_SIZE:
                 _copy(min_, max_)
             elif Math.is_number(min_) and Math.is_number(max_):
                 mid_ = int(round((float(min_) + float(max_)) / 2, 0))
@@ -310,10 +300,12 @@ def main():
 
     current_time = Date.now()
     time_file = File(config.last_replication_time)
+    # ENSURE THE DESTINATION EXISTS
+    elasticsearch.Cluster(config.destination).get_or_create_index(config.destination)
 
     # SYNCH WITH source ES INDEX
-    source = elasticsearch.Index(config.source)
-    destination = elasticsearch.Cluster(config.destination).get_or_create_index(config.destination)
+    source = jx_elasticsearch.new_instance(config.source)
+    destination = jx_elasticsearch.new_instance(config.destination)
 
     # GET LAST UPDATED
     if config.since != None:
@@ -373,7 +365,6 @@ def main():
 
 
 def start():
-    global hg
     global config
     _ = wrap
 
@@ -382,8 +373,6 @@ def start():
         with startup.SingleInstance(config.args.filename):
             constants.set(config.constants)
             Log.start(config.debug)
-            if config.hg:
-                hg = HgMozillaOrg(config.hg)
             main()
     except Exception as e:
         Log.warning("Problems exist", e)
