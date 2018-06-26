@@ -3,12 +3,12 @@
 	"primary_interval": 500000,
 	"last_replication_time": "./results/data/repo_last_replication_time.txt",
 	"source": {
-		"host": "http://localhost",
-		"port": 9201,
+		"host": "http://54.149.21.8",
+		"port": 9200,
 		"index": "repo",
 		"type": "revision",
-		"debug": false,
-		"tjson": true
+		"debug": true,
+		"typed": false
 	},
 	"destination": {
 		"host": "http://localhost",
@@ -19,9 +19,9 @@
 		"schema": {
 			"$ref": "//../schema/revision.json"
 		},
-		"debug": false,
+		"debug": true,
 		"limit_replicas": true,
-		"tjson": false,
+		"typed": false,
 		"zip": false
 	},
 	"constants": {
@@ -30,6 +30,7 @@
 		}
 	},
 	"debug": {
+		"trace": "true",
 		"log": [
 			{
 				"log_type": "stream",

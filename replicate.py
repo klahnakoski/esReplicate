@@ -42,7 +42,7 @@ def get_last_updated(es):
     try:
         results_max = es.query({
             "select": [config.primary_field],
-            "from": "repo",
+            "from": es.name,
             "sort": {config.primary_field: "desc"},
             "limit": 1,
             "format": "list"
@@ -69,7 +69,7 @@ def get_pending(source, since, pending_bugs, please_stop):
                 Log.note("Get all records")
                 result = source.query({
                     "select": ["_id", config.primary_field],
-                    "from": "repo",
+                    "from": config.source.index,
                     "where": {"exists": config.primary_field},
                     "sort": [config.primary_field],
                     "limit": INSERT_BATCH_SIZE,
@@ -83,7 +83,7 @@ def get_pending(source, since, pending_bugs, please_stop):
                 )
                 result = source.query({
                     "select": ["_id", config.primary_field],
-                    "from": "repo",
+                    "from": config.source.index,
                     "where": {"gte": {config.primary_field: since}},
                     "sort": [config.primary_field],
                     "limit": INSERT_BATCH_SIZE,
@@ -96,7 +96,7 @@ def get_pending(source, since, pending_bugs, please_stop):
                 # GET ALL WITH THIS TIMESTAMP
                 result = source.query({
                     "select": ["_id", config.primary_field],
-                    "from": "repo",
+                    "from": config.source.index,
                     "where": {"eq": {config.primary_field: since}},
                     "sort": [config.primary_field],
                     "limit": 100000,
@@ -142,7 +142,7 @@ def diff(source, destination, pending, please_stop):
             {"name": "max", "value": config.primary_field, "aggregate": "max"},
             {"name": "min", "value": config.primary_field, "aggregate": "min"}
         ],
-        "from": "repo",
+        "from": config.source.index,
         "format": "list"
     }).data
 
@@ -159,7 +159,7 @@ def diff(source, destination, pending, please_stop):
 
             source_result = source.query({
                 "select": "_id",
-                "from": "repo",
+                "from": config.source.index,
                 "where": {"and": [
                     {"gte": {config.primary_field: min_}},
                     {"lt": {config.primary_field: max_}},
@@ -171,7 +171,7 @@ def diff(source, destination, pending, please_stop):
 
             destination_result = destination.query({
                 "select": "_id",
-                "from": "repo",
+                "from": config.destination.index,
                 "where": {"and": [
                     {"gte": {config.primary_field: min_}},
                     {"lt": {config.primary_field: max_}},
@@ -207,7 +207,7 @@ def diff(source, destination, pending, please_stop):
         try:
             source_count = source.search({
                 "select": {"aggregate": "count"},
-                "from": "repo",
+                "from": config.source.index,
                 "where": {"and": [
                     {"gte": {config.primary_field: min_}},
                     {"lt": {config.primary_field: max_}},
@@ -219,7 +219,7 @@ def diff(source, destination, pending, please_stop):
                 # SOMETIMES THE TWO ARE TOO DIFFERENT TO BE OPTIMISTIC
                 dest_count = destination.search({
                     "select": {"aggregate": "count"},
-                    "from": "repo",
+                    "from": config.destination.index,
                     "where": {"and": [
                         {"gte": {config.primary_field: min_}},
                         {"lt": {config.primary_field: max_}},
@@ -275,17 +275,14 @@ def replicate(source, destination, pending_ids, fixes, please_stop):
     for g, docs in jx.groupby(pending_ids, max_size=INSERT_BATCH_SIZE):
         try:
             with Timer("Replicate {{num_docs}} documents", {"num_docs": len(docs)}):
-                data = source.search({
-                    "query": {"filtered": {
-                        "query": {"match_all": {}},
-                        "filter": {"terms": {"_id": set(docs)}}
-                    }},
-                    "from": 0,
-                    "size": SCAN_BATCH_SIZE,
-                    "sort": []
+                result = source.search({
+                    "select": ["_id", {"name": "_source", "value": "."}],
+                    "from": config.source.index,
+                    "where": {"in": {"_id": set(docs)}},
+                    "limit": SCAN_BATCH_SIZE
                 })
 
-                destination.extend([{"id": h._id, "value": fixer(h._source)} for h in data.hits.hits])
+                destination.extend([{"id": h._id, "value": fixer(h._source)} for h in result.data])
         except Exception as e:
             Log.warning("could not replicate batch", cause=e)
 
@@ -340,15 +337,15 @@ def main():
         pending,
         please_stop=please_stop
     )
-    replication_thread = Thread.run(
-        "replication",
-        replicate,
-        source,
-        destination,
-        pending,
-        config.fix,
-        please_stop=please_stop
-    )
+    # replication_thread = Thread.run(
+    #     "replication",
+    #     replicate,
+    #     source,
+    #     destination,
+    #     pending,
+    #     config.fix,
+    #     please_stop=please_stop
+    # )
     pending_thread.join()
     diff_thread.join()
     pending.add(THREAD_STOP)
