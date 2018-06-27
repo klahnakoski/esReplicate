@@ -300,6 +300,8 @@ class Index(Features):
         lines = []
         try:
             for r in records:
+                if '_id' in r or 'id' not in r:  # I MAKE THIS MISTAKE SO OFTEN, I NEED A CHECK
+                    Log.error('Expecting {"id":id, "value":document} form.  Not expecting _id')
                 rec = self.encode(r)
                 json_bytes = rec['json']
                 lines.append('{"index":{"_id": ' + convert.value2json(rec['id']) + '}}')

@@ -89,7 +89,7 @@ def main():
 
             bulk = [
                 {
-                    "_id": coalesce(rev.changeset.id12, "") + "-" + rev.branch.name + "-" + coalesce(rev.branch.locale, DEFAULT_LOCALE),
+                    "id": coalesce(rev.changeset.id12, "") + "-" + rev.branch.name + "-" + coalesce(rev.branch.locale, DEFAULT_LOCALE),
                     "value": rev
                 }
                 for rev in result.data
@@ -105,8 +105,8 @@ def main():
             else:
                 Log.warning("{{date|datetime}} has problems", date=min, cause=e)
 
-
     min_date = (Date.today()-YEAR).unix
+    # min_date = Date("2018-04-24 00:23:22").unix
     max_date = Date.eod().unix
     split(min_date, max_date)
     Log.note("Done")
