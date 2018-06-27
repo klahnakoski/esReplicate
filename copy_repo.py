@@ -18,7 +18,7 @@ from mo_hg.hg_mozilla_org import DEFAULT_LOCALE
 import jx_elasticsearch
 from mo_dots import wrap, coalesce
 from mo_logs import startup, constants, Log
-from mo_times import Date, DAY, HOUR, YEAR
+from mo_times import Date, DAY, HOUR, YEAR, WEEK
 from pyLibrary.env import elasticsearch, http
 
 # REPLICATION
@@ -105,8 +105,8 @@ def main():
             else:
                 Log.warning("{{date|datetime}} has problems", date=min, cause=e)
 
-    min_date = (Date.today()-YEAR).unix
-    # min_date = Date("2018-04-24 00:23:22").unix
+    min_date = (Date.today()-(2*WEEK)).unix
+    # max_date = Date("2018-04-24 00:23:22").unix
     max_date = Date.eod().unix
     split(min_date, max_date)
     Log.note("Done")
