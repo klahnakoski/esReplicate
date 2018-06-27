@@ -202,7 +202,7 @@ class ES52(Container):
 
         # GET IDS OF DOCUMENTS
         results = self.es.search({
-            "stored_fields": listwrap(schema._routing.path),
+            "stored_fields": ["_id"],
             "query": {"bool": {
                 "filter": jx_expression(command.where).to_esfilter(Null)
             }},
@@ -224,7 +224,7 @@ class ES52(Container):
             updates = []
             for h in results.hits.hits:
                 for s in scripts:
-                    updates.append({"update": {"_id": h._id, "_routing": unwraplist(h.fields[literal_field(schema._routing.path)])}})
+                    updates.append({"update": {"_id": h._id}})
                     updates.append(s)
             content = ("\n".join(value2json(c) for c in updates) + "\n")
             response = self.es.cluster.post(

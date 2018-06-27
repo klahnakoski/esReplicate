@@ -17,11 +17,8 @@ from mo_hg.hg_mozilla_org import DEFAULT_LOCALE
 
 import jx_elasticsearch
 from mo_dots import wrap, coalesce
-from mo_files import File
-from mo_future import text_type
 from mo_logs import startup, constants, Log
-from mo_threads import Queue, Thread, Signal, THREAD_STOP
-from mo_times import Date, DAY
+from mo_times import Date, DAY, HOUR, YEAR
 from pyLibrary.env import elasticsearch, http
 
 # REPLICATION
@@ -52,32 +49,67 @@ def main():
     source = jx_elasticsearch.new_instance(config.source)
 
 
-    for i in range(30):
-        date = Date.today()-(i*DAY)
+    def split(min, max):
         result = source.query({
+            "select":{"aggregate":"count"},
             "from": "repo",
             "where": {"and": [
-                {"gte": {"push.date": date}},
-                {"lt": {"push.date": date + DAY}}
-            ]},
-            "format": "list",
-            "limit": 100000
+                {"gte": {"changeset.date": min}},
+                {"lt": {"changeset.date": max}}
+            ]}
         })
 
-        if len(result.data) % 10000 ==0:
-            Log.warning("too many records")
+        num = result.data['count'].value
 
-        bulk = [
-            {
-                "_id": coalesce(rev.changeset.id12, "") + "-" + rev.branch.name + "-" + coalesce(rev.branch.locale, DEFAULT_LOCALE),
-                "value": rev
-            }
-            for rev in result.data
+        if not num:
+            return
 
-        ]
+        if num > 100:
+            mid = int((min+max)/2)
+            if mid > min:
+                split(mid, max)
+                split(min, mid)
+                return
 
-        Log.note("Add repo records for {{date|datetime}}", date=date)
-        destination.extend(bulk)
+        try:
+            Log.note("pulling {{num}} records for {{day|datetime}}", num=num, day=min)
+
+            result = source.query({
+                "from": "repo",
+                "where": {"and": [
+                    {"gte": {"changeset.date": min}},
+                    {"lt": {"changeset.date": max}}
+                ]},
+                "format": "list",
+                "limit": 100000
+            })
+
+            if len(result.data) % 10000 == 0:
+                Log.warning("too many records")
+
+            bulk = [
+                {
+                    "_id": coalesce(rev.changeset.id12, "") + "-" + rev.branch.name + "-" + coalesce(rev.branch.locale, DEFAULT_LOCALE),
+                    "value": rev
+                }
+                for rev in result.data
+
+            ]
+
+            destination.extend(bulk)
+        except Exception as e:
+            mid = int((min+max)/2)
+            if mid > min:
+                split(mid, max)
+                split(min, mid)
+            else:
+                Log.warning("{{date|datetime}} has problems", date=min, cause=e)
+
+
+    min_date = (Date.today()-YEAR).unix
+    max_date = Date.eod().unix
+    split(min_date, max_date)
+    Log.note("Done")
 
 
 def start():

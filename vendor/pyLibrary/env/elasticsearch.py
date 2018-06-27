@@ -1123,10 +1123,9 @@ class Alias(Features):
                 # TODO: MERGE THE mappings OF ALL candidates, DO NOT JUST PICK THE LAST ONE
 
                 index = "dummy value"
-                schema = wrap({"_routing": {}, "properties": {}})
+                schema = wrap({"properties": {}})
                 for _, ind in jx.sort(candidates, {"value": 0, "sort": -1}):
                     mapping = ind.mappings[self.settings.type]
-                    set_default(schema._routing, mapping._routing)
                     schema.properties = _merge_mapping(schema.properties, mapping.properties)
             else:
                 #FULLY DEFINED settings
@@ -1537,7 +1536,34 @@ DEFAULT_DYNAMIC_TEMPLATES = wrap([
             "mapping": {"type": "keyword", "store": True},
             "match_mapping_type": "string"
         }
-    }
+    },
+    {
+        "default_long": {
+            "mapping": {"type": "long", "store": True},
+            "match_mapping_type": "long"
+        }
+    },
+    {
+        "default_int": {
+            "mapping": {"type": "int", "store": True},
+            "match_mapping_type": "int"
+        }
+    },
+    {
+        "default_double": {
+            "mapping": {"type": "double", "store": True},
+            "match_mapping_type": "double"
+        }
+    },
+    {
+        "default_float": {
+            "mapping": {"type": "double", "store": True},
+            "match_mapping_type": "float"
+        }
+    },
+
+
+
 ])
 
 

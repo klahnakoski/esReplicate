@@ -874,6 +874,11 @@ class InequalityOp(Expression):
         else:
             return {self.op: [self.lhs.__data__(), self.rhs.__data__()]}
 
+    def __eq__(self, other):
+        if not isinstance(other, InequalityOp):
+            return FALSE
+        return other.op == self.op and other.rhs == self.rhs and other.lhs == self.lhs
+
     def vars(self):
         return self.lhs.vars() | self.rhs.vars()
 
