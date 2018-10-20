@@ -203,7 +203,7 @@ class ES14(Container):
         results = self.es.search({
             "fields": ["_id"],
             "query": {"filtered": {
-                "filter": jx_expression(command.where).to_esfilter14(Null)
+                "filter": jx_expression(command.where).to_es14_filter(Null)
             }},
             "size": 10000
         })
@@ -217,7 +217,7 @@ class ES14(Container):
                 scripts.append({"doc": v.doc})
             else:
                 v = scrub(v)
-                scripts.append({"script": "ctx._source." + k + " = " + jx_expression(v).to_es_script(schema).script(schema)})
+                scripts.append({"script": "ctx._source." + k + " = " + jx_expression(v).to_es14_script(schema).script(schema)})
 
         if results.hits.hits:
             updates = []

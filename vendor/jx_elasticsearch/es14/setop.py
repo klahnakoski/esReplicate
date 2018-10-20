@@ -59,7 +59,7 @@ def es_setop(es, query):
 
     es_query, filters = es_query_template(schema.query_path[0])
     nested_filter = None
-    set_default(filters[0], query.where.partial_eval().to_esfilter14(schema))
+    set_default(filters[0], query.where.partial_eval().to_es14_filter(schema))
     es_query.size = coalesce(query.limit, DEFAULT_LIMIT)
     es_query.fields = FlatList()
 
@@ -179,7 +179,7 @@ def es_setop(es, query):
                 })
             put_index += 1
         else:
-            painless = select.value.partial_eval().to_es_script(schema)
+            painless = select.value.partial_eval().to_es14_script(schema)
             es_query.script_fields[literal_field(select.name)] =  es_script(painless.script(schema))
             new_select.append({
                 "name": select.name,
