@@ -14,3 +14,4 @@ dist
 /pyLibrary/.svn
 /results
 /mo_hg/.svn
+/*.sqlite

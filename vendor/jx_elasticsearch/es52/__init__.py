@@ -201,26 +201,9 @@ class ES52(Container):
         es_filter = jx_expression(command.where).to_esfilter(schema)
 
         # GET IDS OF DOCUMENTS
-<<<<<<< .mine
-        results = self.es.search({
-            "stored_fields": ["_id"],
-            "query": {"bool": {
-                "filter": jx_expression(command.where).to_esfilter(Null)
-            }},
-            "size": 10000
-        })
-||||||| .r1211
-        results = self.es.search({
-            "stored_fields": listwrap(schema._routing.path),
-            "query": {"bool": {
-                "filter": jx_expression(command.where).to_esfilter(Null)
-            }},
-            "size": 10000
-        })
-=======
         query = {
             "from": command['update'],
-            "select": ["_id"] + [
+            "select": [{"value": "_id"}] + [
                 {"name": k, "value": v}
                 for k, v in command.set.items()
             ],
@@ -228,27 +211,9 @@ class ES52(Container):
             "format": "list",
             "limit": 10000
         }
->>>>>>> .r1431
 
         results = self.query(query)
 
-<<<<<<< .mine
-        if results.hits.hits:
-            updates = []
-            for h in results.hits.hits:
-                for s in scripts:
-                    updates.append({"update": {"_id": h._id}})
-                    updates.append(s)
-            content = ("\n".join(value2json(c) for c in updates) + "\n")
-||||||| .r1211
-        if results.hits.hits:
-            updates = []
-            for h in results.hits.hits:
-                for s in scripts:
-                    updates.append({"update": {"_id": h._id, "_routing": unwraplist(h.fields[literal_field(schema._routing.path)])}})
-                    updates.append(s)
-            content = ("\n".join(value2json(c) for c in updates) + "\n")
-=======
         if results.data:
             content = "".join(
                 t
@@ -258,7 +223,6 @@ class ES52(Container):
                 for update in map(value2json, ({"update": {"_id": _id}}, {"doc": row}))
                 for t in (update, "\n")
             )
->>>>>>> .r1431
             response = self.es.cluster.post(
                 es_index.path + "/" + "_bulk",
                 data=content,

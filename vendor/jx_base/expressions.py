@@ -881,20 +881,11 @@ class InequalityOp(Expression):
         else:
             return {self.op: [self.lhs.__data__(), self.rhs.__data__()]}
 
-<<<<<<< .mine
-    def __eq__(self, other):
-        if not isinstance(other, InequalityOp):
-            return FALSE
-        return other.op == self.op and other.rhs == self.rhs and other.lhs == self.lhs
-
-||||||| .r1211
-=======
     def __eq__(self, other):
         if not isinstance(other, InequalityOp):
             return False
         return self.op == other.op and self.lhs == other.lhs and self.rhs == other.rhs
 
->>>>>>> .r1431
     def vars(self):
         return self.lhs.vars() | self.rhs.vars()
 

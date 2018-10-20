@@ -59,7 +59,7 @@ def es_setop(es, query):
 
     es_query, filters = es_query_template(schema.query_path[0])
     nested_filter = None
-    set_default(filters[0], query.where.partial_eval().to_esfilter(schema))
+    set_default(filters[0], query.where.partial_eval().to_esfilter14(schema))
     es_query.size = coalesce(query.limit, DEFAULT_LIMIT)
     es_query.fields = FlatList()
 

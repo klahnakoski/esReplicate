@@ -14,9 +14,6 @@
 		"index": "saved_queries",
 		"type": "query",
 		"timeout": 300,
-		"schema": {
-			"$ref": "//../schema/saved_queries.json"
-		},
 		"debug": false,
 		"limit_replicas": true,
 		"zip": false

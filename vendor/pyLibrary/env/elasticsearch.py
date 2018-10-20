@@ -1553,38 +1553,6 @@ DEFAULT_DYNAMIC_TEMPLATES = wrap([
             "mapping": {"type": "keyword", "store": True},
             "match_mapping_type": "string"
         }
-<<<<<<< .mine
-    },
-    {
-        "default_long": {
-            "mapping": {"type": "long", "store": True},
-            "match_mapping_type": "long"
-        }
-    },
-    {
-        "default_int": {
-            "mapping": {"type": "int", "store": True},
-            "match_mapping_type": "int"
-        }
-    },
-    {
-        "default_double": {
-            "mapping": {"type": "double", "store": True},
-            "match_mapping_type": "double"
-        }
-    },
-    {
-        "default_float": {
-            "mapping": {"type": "double", "store": True},
-            "match_mapping_type": "float"
-        }
-    },
-
-
-
-||||||| .r1213
-    }
-=======
     },
     {
         "default_long": {
@@ -1604,7 +1572,6 @@ DEFAULT_DYNAMIC_TEMPLATES = wrap([
             "match_mapping_type": "integer"
         }
     }
->>>>>>> .r1431
 ])
 
 

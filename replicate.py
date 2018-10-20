@@ -32,7 +32,7 @@ from pyLibrary.env import elasticsearch, http
 # 4) The replicate's exclusivity increases availability (Mozilla's public cluster may have time of high load)
 
 far_back = datetime.utcnow() - timedelta(weeks=52)
-INSERT_BATCH_SIZE = 1
+INSERT_BATCH_SIZE = 1000
 SCAN_BATCH_SIZE = 50000
 http.ZIP_REQUEST = False
 config = None
@@ -90,7 +90,7 @@ def get_pending(source, since, pending_bugs, please_stop):
                     "format": "list"
                 })
 
-            new_max_value = MAX(result.data[config.primary_field])
+            new_max_value = MAX(result.data.get(config.primary_field))
 
             if since == new_max_value:
                 # GET ALL WITH THIS TIMESTAMP
@@ -102,7 +102,9 @@ def get_pending(source, since, pending_bugs, please_stop):
                     "limit": 100000,
                     "format": "list"
                 })
-                if Math.is_integer(new_max_value):
+                if new_max_value==None:
+                    break  # NOTHING LEFT TO UPDATE
+                elif Math.is_integer(new_max_value):
                     since = int(new_max_value) + 1
                 elif Math.is_number(new_max_value):
                     since = float(new_max_value) + 0.5
@@ -137,7 +139,7 @@ def diff(source, destination, pending, please_stop):
         return
 
     # FIND source MIN/MAX
-    results = source.search({
+    results = source.query({
         "select": [
             {"name": "max", "value": config.primary_field, "aggregate": "max"},
             {"name": "min", "value": config.primary_field, "aggregate": "min"}
@@ -149,7 +151,7 @@ def diff(source, destination, pending, please_stop):
     if len(results) == 0:
         return
 
-    _max, _min = results[0].max, results[0].min
+    _max, _min = results.max, results.min
 
     def _copy(min_, max_):
         try:
@@ -205,7 +207,7 @@ def diff(source, destination, pending, please_stop):
 
     def _partition(min_, max_):
         try:
-            source_count = source.search({
+            source_count = source.query({
                 "select": {"aggregate": "count"},
                 "from": config.source.index,
                 "where": {"and": [
@@ -217,7 +219,7 @@ def diff(source, destination, pending, please_stop):
 
             if num_mismatches[0] < 10:
                 # SOMETIMES THE TWO ARE TOO DIFFERENT TO BE OPTIMISTIC
-                dest_count = destination.search({
+                dest_count = destination.query({
                     "select": {"aggregate": "count"},
                     "from": config.destination.index,
                     "where": {"and": [
@@ -309,6 +311,8 @@ def main():
         last_updated = Date(config.since).unix
     else:
         last_updated = get_last_updated(destination)
+    if not isinstance(last_updated, float):
+        Log.error("Expecting a float")
 
     if config.batch_size:
         INSERT_BATCH_SIZE = config.batch_size
@@ -337,15 +341,15 @@ def main():
         pending,
         please_stop=please_stop
     )
-    # replication_thread = Thread.run(
-    #     "replication",
-    #     replicate,
-    #     source,
-    #     destination,
-    #     pending,
-    #     config.fix,
-    #     please_stop=please_stop
-    # )
+    replication_thread = Thread.run(
+        "replication",
+        replicate,
+        source,
+        destination,
+        pending,
+        config.fix,
+        please_stop=please_stop
+    )
     pending_thread.join()
     diff_thread.join()
     pending.add(THREAD_STOP)
