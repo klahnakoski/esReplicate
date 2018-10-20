@@ -35,6 +35,20 @@
 			{
 				"log_type": "stream",
 				"stream": "sys.stdout"
+			},
+			{
+				"class": "logging.handlers.RotatingFileHandler",
+				"filename": "./results/logs/replicate_repo.log",
+				"maxBytes": 10000000,
+				"backupCount": 10,
+				"encoding": "utf8"
+			},
+			{
+				"log_type": "ses",
+				"$ref": "file://~/private.json#aws_credentials",
+				"from_address": "klahnakoski@mozilla.com",
+				"to_address": "klahnakoski@mozilla.com",
+				"subject": "[ALERT][Toronto] Problem in replicate_repo"
 			}
 		]
 	}

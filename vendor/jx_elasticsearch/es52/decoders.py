@@ -12,8 +12,8 @@ from __future__ import division
 from __future__ import unicode_literals
 
 from collections import Mapping
+from time import time
 
-from jx_base import STRING, NUMBER, BOOLEAN
 from jx_base.dimensions import Dimension
 from jx_base.domains import SimpleSetDomain, DefaultDomain, PARTITION
 from jx_base.expressions import TupleOp, TRUE
@@ -22,12 +22,15 @@ from jx_elasticsearch.es52.expressions import Variable, NotOp, InOp, Literal, An
 from jx_elasticsearch.es52.util import es_missing
 from jx_python import jx
 from mo_dots import wrap, set_default, coalesce, literal_field, Data, relative_field, unwraplist
-from mo_future import text_type
+from mo_future import text_type, transpose
+from mo_json import STRING, NUMBER, BOOLEAN, IS_NULL
 from mo_json.typed_encoder import untype_path
 from mo_logs import Log
 from mo_logs.strings import quote, expand_template
 from mo_math import MAX, MIN, Math
 from pyLibrary.convert import string2boolean
+
+DEBUG = True
 
 
 class AggsDecoder(object):
@@ -64,7 +67,19 @@ class AggsDecoder(object):
                 col = cols[0]
                 limit = coalesce(e.domain.limit, query.limit, DEFAULT_LIMIT)
 
-                if col.partitions != None:
+                temp = col.partitions
+
+                if col.partitions == None:
+                    start = time()
+                    while col.partitions == None:
+                        pass
+                    end = time()
+                    Log.note("took {{duration}} to find parts", duration=end-start)
+                    DEBUG and Log.note("id={{id}} has no parts {{column}}", id=id(col), column=col)
+                    e.domain = set_default(DefaultDomain(limit=limit), e.domain.__data__())
+                    return object.__new__(DefaultDecoder, e)
+                else:
+                    DEBUG and Log.note("id={{id}} has parts!!!", id=id(col))
                     if col.multi > 1 and len(col.partitions) < 6:
                         return object.__new__(MultivalueDecoder)
 
@@ -74,9 +89,6 @@ class AggsDecoder(object):
                     else:
                         partitions = sorted(partitions)
                     e.domain = SimpleSetDomain(partitions=partitions, limit=limit)
-                else:
-                    e.domain = set_default(DefaultDomain(limit=limit), e.domain.__data__())
-                    return object.__new__(DefaultDecoder, e)
 
             else:
                 return object.__new__(DefaultDecoder, e)
@@ -125,13 +137,13 @@ class AggsDecoder(object):
         pass
 
     def get_value_from_row(self, row):
-        Log.error("Not implemented")
+        raise NotImplementedError()
 
     def get_value(self, index):
-        Log.error("Not implemented")
+        raise NotImplementedError()
 
     def get_index(self, row):
-        Log.error("Not implemented")
+        raise NotImplementedError()
 
     @property
     def num_columns(self):
@@ -161,7 +173,7 @@ class SetDecoder(AggsDecoder):
         domain = self.domain
 
         domain_key = domain.key
-        include, text_include = zip(*(
+        include, text_include = transpose(*(
             (
                 float(v) if isinstance(v, (int, float)) else v,
                 text_type(float(v)) if isinstance(v, (int, float)) else v
@@ -502,8 +514,8 @@ class ObjectDecoder(AggsDecoder):
             prefix = edge.value.var
             flatter = lambda k: relative_field(k, prefix)
 
-        self.put, self.fields = zip(*[
-            (flatter(untype_path(c.names["."])), c.es_column)
+        self.put, self.fields = transpose(*[
+            (flatter(untype_path(c.name)), c.es_column)
             for c in query.frum.schema.leaves(prefix)
         ])
 
@@ -562,7 +574,7 @@ class ObjectDecoder(AggsDecoder):
             return None
 
         output = Data()
-        for k, v in zip(self.put, part):
+        for k, v in transpose(self.put, part):
             output[k] = v.get('key')
         return output
 
@@ -751,6 +763,7 @@ class DimFieldListDecoder(SetDecoder):
 
 
 pull_functions = {
+    IS_NULL: lambda x: None,
     STRING: lambda x: x,
     NUMBER: lambda x: float(x) if x !=None else None,
     BOOLEAN: string2boolean
