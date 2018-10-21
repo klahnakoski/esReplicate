@@ -1,0 +1,28 @@
+{
+	"settings": {
+		"index.number_of_shards": 1,
+		"index.number_of_replicas": 5
+	},
+	"mappings": {
+		"query":{
+			"properties": {
+				"create_time": {
+					"type": "double",
+					"store": true
+				},
+				"last_used": {
+					"type": "double",
+					"store": true
+				},
+				"hash": {
+					"type": "keyword",
+					"store": true
+				},
+				"query": {
+					"type": "text",
+					"store": true
+				}
+			}
+		}
+	}
+}

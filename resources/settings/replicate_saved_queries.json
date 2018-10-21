@@ -1,6 +1,7 @@
 {
 	"primary_field": "last_used",
 	"last_replication_time": "./results/data/saved_queries_last_replication_time.txt",
+
 	"source": {
 		"host": "http://activedata.allizom.org",
 		"port": 9200,
@@ -8,11 +9,17 @@
 		"type": "query",
 		"debug": false
 	},
+	"fix":{
+		"query":"query if isinstance(query, text_type) else value2json(query)"
+	},
 	"destination": {
+//		"host": "http://54.149.21.8",
 		"host": "http://localhost",
 		"port": 9200,
 		"index": "saved_queries",
 		"type": "query",
+		"typed": false,
+		"schema": {"$ref":"../schema/saved_queries.json"},
 		"timeout": 300,
 		"debug": false,
 		"limit_replicas": true,

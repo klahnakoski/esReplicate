@@ -341,7 +341,7 @@ def es_aggsop(es, frum, query):
 
     es_query.size = 0
 
-    with Timer("ES query time") as es_duration:
+    with Timer("ES query time", silent=True) as es_duration:
         result = es_post(es, es_query, query.limit)
 
     try:

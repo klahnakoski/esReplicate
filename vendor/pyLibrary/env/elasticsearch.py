@@ -1272,7 +1272,7 @@ def parse_properties(parent_index_name, parent_name, nested_path, esProperties):
         if not property.type:
             continue
 
-        cardinality = 0 if not property.store and not name != '_id' else None
+        cardinality = 0 if not (property.store or property.enabled) and name != '_id' else None
 
         if property.fields:
             child_columns = parse_properties(index_name, column_name, nested_path, property.fields)

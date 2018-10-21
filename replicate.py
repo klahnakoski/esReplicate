@@ -13,16 +13,21 @@ from __future__ import unicode_literals
 
 from datetime import timedelta, datetime
 
+from pyLibrary.env.elasticsearch import Cluster
+
 import jx_elasticsearch
 from jx_python import jx
-from mo_dots import wrap
+from mo_dots import wrap, Null
 from mo_files import File
 from mo_future import text_type
+from mo_json import value2json
 from mo_logs import startup, constants, Log
 from mo_math import Math, MAX
-from mo_threads import Queue, Thread, Signal, THREAD_STOP
+from mo_threads import Queue, Thread, Signal, THREAD_STOP, Till
 from mo_times import Date, Timer
 from pyLibrary.env import elasticsearch, http
+
+_ = value2json
 
 # REPLICATION
 #
@@ -277,11 +282,12 @@ def replicate(source, destination, pending_ids, fixes, please_stop):
     for g, docs in jx.groupby(pending_ids, max_size=INSERT_BATCH_SIZE):
         try:
             with Timer("Replicate {{num_docs}} documents", {"num_docs": len(docs)}):
-                result = source.search({
+                result = source.query({
                     "select": ["_id", {"name": "_source", "value": "."}],
                     "from": config.source.index,
                     "where": {"in": {"_id": set(docs)}},
-                    "limit": SCAN_BATCH_SIZE
+                    "limit": SCAN_BATCH_SIZE,
+                    "format": "list"
                 })
 
                 destination.extend([{"id": h._id, "value": fixer(h._source)} for h in result.data])
@@ -304,40 +310,50 @@ def main():
 
     # SYNCH WITH source ES INDEX
     source = jx_elasticsearch.new_instance(config.source)
-    destination = jx_elasticsearch.new_instance(config.destination)
 
-    # GET LAST UPDATED
-    if config.since != None:
-        last_updated = Date(config.since).unix
-    else:
-        last_updated = get_last_updated(destination)
-    if not isinstance(last_updated, float):
-        Log.error("Expecting a float")
+    destination_cluster = Cluster(config.destination)
+    destination_es = destination_cluster.get_or_create_index(read_only=False, kwargs=config.destination)
+    config.destination.index = destination_es.settings.index  # ASSIGN FULL NAME
+    destination_jx = jx_elasticsearch.new_instance(config.destination)
+
+    # SETUP QUEUE FOR TRANSFErING RECORDS
+    please_stop = Signal()
+    done = Signal()
 
     if config.batch_size:
         INSERT_BATCH_SIZE = config.batch_size
 
-    Log.note("updating records with {{primary_field}}>={{last_updated}}", last_updated=last_updated,
-             primary_field=config.primary_field)
-
-    please_stop = Signal()
-    done = Signal()
-
     pending = Queue("pending ids", max=INSERT_BATCH_SIZE * 3, silent=False)
 
-    pending_thread = Thread.run(
-        "get pending",
-        get_pending,
-        source=source,
-        since=last_updated,
-        pending_bugs=pending,
-        please_stop=please_stop
-    )
+    # GET RECENT RECORDS
+    if config.since != None:
+        last_updated = Date(config.since).unix
+    else:
+        last_updated = get_last_updated(destination_jx)
+    if isinstance(last_updated, float):
+        Log.note(
+            "updating records with {{primary_field}}>={{last_updated}}",
+            last_updated=last_updated,
+            primary_field=config.primary_field
+        )
+
+        pending_thread = Thread.run(
+            "get pending",
+            get_pending,
+            source=source,
+            since=last_updated,
+            pending_bugs=pending,
+            please_stop=please_stop
+        )
+    else:
+        pending_thread = Null
+
+    # REVIEW
     diff_thread = Thread.run(
         "diff",
         diff,
         source,
-        destination,
+        destination_jx,
         pending,
         please_stop=please_stop
     )
@@ -345,7 +361,7 @@ def main():
         "replication",
         replicate,
         source,
-        destination,
+        destination_es,
         pending,
         config.fix,
         please_stop=please_stop
