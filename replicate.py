@@ -13,8 +13,6 @@ from __future__ import unicode_literals
 
 from datetime import timedelta, datetime
 
-from pyLibrary.env.elasticsearch import Cluster
-
 import jx_elasticsearch
 from jx_python import jx
 from mo_dots import wrap, Null
@@ -23,9 +21,10 @@ from mo_future import text_type
 from mo_json import value2json
 from mo_logs import startup, constants, Log
 from mo_math import Math, MAX
-from mo_threads import Queue, Thread, Signal, THREAD_STOP, Till
+from mo_threads import Queue, Thread, Signal, THREAD_STOP
 from mo_times import Date, Timer
 from pyLibrary.env import elasticsearch, http
+from pyLibrary.env.elasticsearch import Cluster
 
 _ = value2json
 
@@ -107,7 +106,7 @@ def get_pending(source, since, pending_bugs, please_stop):
                     "limit": 100000,
                     "format": "list"
                 })
-                if new_max_value==None:
+                if new_max_value == None:
                     break  # NOTHING LEFT TO UPDATE
                 elif Math.is_integer(new_max_value):
                     since = int(new_max_value) + 1
