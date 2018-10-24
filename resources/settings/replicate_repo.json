@@ -2,8 +2,12 @@
 	"primary_field": "changeset.date",
 	"primary_interval": 500000,
 	"last_replication_time": "./results/data/repo_last_replication_time.txt",
+	"insert_size": 10,
+	"scan_size": 1000,
+
 	"source": {
 		"host": "http://activedata.allizom.org",
+//		"host": "http://54.244.44.73",  // OLD CLUSTER
 		"port": 9200,
 		"index": "repo",
 		"type": "revision",
@@ -14,9 +18,10 @@
 		"port": 9200,
 		"index": "repo",
 		"type": "revision",
+		"typed": false,
 		"timeout": 300,
 		"schema": {
-			"$ref": "//../schema/revision.json"
+			"$ref": "../../vendor/mo_hg/repos/revision_schema.json"
 		},
 		"debug": false,
 		"limit_replicas": true,
@@ -28,6 +33,7 @@
 		}
 	},
 	"debug": {
+		"trace": true,
 		"log": [
 			{
 				"log_type": "stream",

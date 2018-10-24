@@ -155,7 +155,9 @@ class ElasticsearchMetadata(Namespace):
         abs_columns = elasticsearch.parse_properties(alias, ".", ROOT_PATH, mapping.properties)
         if any(c.cardinality == 0 and c.name != '_id' for c in abs_columns):
             Log.warning(
-                "Some columns are not stored {{names}}",
+                "Some columns are not stored in {{url}} {{index|quote}} table:\n{{names}}",
+                url=self.es_cluster.url,
+                index=alias,
                 names=[
                     ".".join((c.es_index, c.name))
                     for c in abs_columns
@@ -451,8 +453,9 @@ class ElasticsearchMetadata(Namespace):
             TEST_TABLE = "testdata"
             is_missing_index = any(w in e for w in ["IndexMissingException", "index_not_found_exception"])
             is_test_table = column.es_index.startswith((TEST_TABLE_PREFIX, TEST_TABLE))
-            if is_missing_index and is_test_table:
+            if is_missing_index :
                 # WE EXPECT TEST TABLES TO DISAPPEAR
+                Log.warning("Missing index {{col.es_index}}", col=column, cause=e)
                 self.meta.columns.update({
                     "clear": ".",
                     "where": {"eq": {"es_index": column.es_index}}

@@ -242,9 +242,15 @@ def diff(source, destination, pending, please_stop):
                 _copy(min_, max_)
             elif Math.is_number(min_) and Math.is_number(max_):
                 mid_ = int(round((float(min_) + float(max_)) / 2, 0))
-                # WORK BACKWARDS
-                _partition(mid_, max_)
-                _partition(min_, mid_)
+
+                if mid_ in (min_, max_):
+                    # BITE OFF THE WHOLE BLOCK OF WORK
+                    _copy(min_, max_)
+                else:
+                    # WORK BACKWARDS
+                    _partition(mid_, max_)
+                    _partition(min_, mid_)
+
             else:
                 Log.error("can not split alphabetical in half")
         except Exception as e:
@@ -301,6 +307,7 @@ def replicate(source, destination, pending_ids, fixes, please_stop):
 
 def main():
     global INSERT_BATCH_SIZE
+    global SCAN_BATCH_SIZE
 
     current_time = Date.now()
     time_file = File(config.last_replication_time)
@@ -319,8 +326,14 @@ def main():
     please_stop = Signal()
     done = Signal()
 
+    if config.insert_size:
+        INSERT_BATCH_SIZE = config.insert_size
+
+    if config.scan_size:
+        SCAN_BATCH_SIZE = config.insert_size
+
     if config.batch_size:
-        INSERT_BATCH_SIZE = config.batch_size
+        Log.error("use 'insert_size' or 'scan_size', not 'batch_size'")
 
     pending = Queue("pending ids", max=INSERT_BATCH_SIZE * 3, silent=False)
 

@@ -213,7 +213,7 @@ def es_setop(es, query):
         else:
             Log.error("Do not know what to do")
 
-    with Timer("call to ES") as call_timer:
+    with Timer("call to ES", silent=True) as call_timer:
         data = es_post(es, es_query, query.limit)
 
     T = data.hits.hits
@@ -221,7 +221,7 @@ def es_setop(es, query):
     try:
         formatter, groupby_formatter, mime_type = format_dispatch[query.format]
 
-        with Timer("formatter"):
+        with Timer("formatter", silent=True):
             output = formatter(T, new_select, query)
         output.meta.timing.es = call_timer.duration
         output.meta.content_type = mime_type
