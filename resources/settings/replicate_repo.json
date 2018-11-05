@@ -2,9 +2,12 @@
 	"primary_field": "changeset.date",
 	"primary_interval": 500000,
 	"last_replication_time": "./results/data/repo_last_replication_time.txt",
-	"insert_size": 10,
-	"scan_size": 1000,
-
+	"insert_size": 100,
+	"scan_size": 10000,
+	"fix":{
+		"changeset\\.moves": "None",
+		"changeset\\.diff": "None"
+	},
 	"source": {
 		"host": "http://activedata.allizom.org",
 //		"host": "http://54.244.44.73",  // OLD CLUSTER

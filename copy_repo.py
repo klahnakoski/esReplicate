@@ -35,10 +35,6 @@ http.ZIP_REQUEST = False
 config = None
 
 
-
-
-
-
 def main():
     global INSERT_BATCH_SIZE
 

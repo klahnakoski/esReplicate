@@ -1,27 +1,32 @@
 {
 	"primary_field": "changeset.date",
 	"primary_interval": 500000,
-	"last_replication_time": "./results/data/repo_last_replication_time.txt",
-	"source": {
-		"host": "http://54.149.21.8",
-		"port": 9200,
-		"index": "repo",
-		"type": "revision",
-		"debug": true,
-		"typed": false
+	"last_replication_time": "./results/data/local_repo_last_replication_time.txt",
+	"insert_size": 100,
+	"scan_size": 10000,
+	"fix":{
+		"changeset\\.moves": "None",
+		"changeset\\.diff": "None"
 	},
-	"destination": {
+	"source": {
 		"host": "http://localhost",
 		"port": 9200,
 		"index": "repo",
 		"type": "revision",
+		"debug": false
+	},
+	"destination": {
+		"host": "http://localhost",
+		"port": 9200,
+		"index": "repo20171105_000000",
+		"type": "revision",
+		"typed": false,
 		"timeout": 300,
 		"schema": {
-			"$ref": "//../schema/revision.json"
+			"$ref": "../../vendor/mo_hg/repos/revision_schema.json"
 		},
-		"debug": true,
+		"debug": false,
 		"limit_replicas": true,
-		"typed": false,
 		"zip": false
 	},
 	"constants": {
@@ -30,7 +35,7 @@
 		}
 	},
 	"debug": {
-		"trace": "true",
+		"trace": true,
 		"log": [
 			{
 				"log_type": "stream",

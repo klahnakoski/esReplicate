@@ -29,7 +29,11 @@
 			"properties": {
 				"changeset": {
 					"type": "object",
-					"properties": {
+					"properties":{
+						"date": {
+							"store": true,
+							"type": "double"
+						},
 						"description": {
 							"store": true,
 							"index": true,
@@ -37,6 +41,42 @@
 							"fields": {
 								"words":{
 									"type":"text"
+								}
+							}
+						},
+						"moves": {
+							"type": "nested",
+							"dynamic": true,
+							"properties": {
+								"new": {
+									"properties": {
+										"name": {
+											"store": true,
+											"type": "keyword"
+										}
+									}
+								},
+								"old": {
+									"properties": {
+										"name": {
+											"store": true,
+											"type": "keyword"
+										}
+									}
+								},
+								"changes": {
+									"type": "nested",
+									"dynamic": true,
+									"properties": {
+										"line": {
+											"store": true,
+											"type": "long"
+										},
+										"action": {
+											"store": true,
+											"type": "keyword"
+										}
+									}
 								}
 							}
 						},

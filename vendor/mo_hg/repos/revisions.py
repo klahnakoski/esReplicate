@@ -26,4 +26,4 @@ class Revision(Data):
         return (self.branch.name.lower(), self.changeset.id[:12]) == (other.branch.name.lower(), other.changeset.id[:12])
 
 
-revision_schema = (File(__file__) / "revision_schema.json").read_json()
+revision_schema = (File(__file__).parent / "revision_schema.json").read_json()

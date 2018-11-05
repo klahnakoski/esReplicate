@@ -238,6 +238,13 @@ def diff(source, destination, pending, please_stop):
                 elif source_count < SCAN_BATCH_SIZE:
                     num_mismatches[0] += 1
 
+            Log.note(
+                "Scan from {{min}} to {{max}}:  source={{source}}",
+                min=min_,
+                max=max_,
+                source=source_count
+            )
+
             if source_count < SCAN_BATCH_SIZE:
                 _copy(min_, max_)
             elif Math.is_number(min_) and Math.is_number(max_):
@@ -291,7 +298,7 @@ def replicate(source, destination, pending_ids, fixes, please_stop):
                     "select": ["_id", {"name": "_source", "value": "."}],
                     "from": config.source.index,
                     "where": {"in": {"_id": set(docs)}},
-                    "limit": SCAN_BATCH_SIZE,
+                    "limit": INSERT_BATCH_SIZE,
                     "format": "list"
                 })
 
@@ -322,7 +329,7 @@ def main():
     config.destination.index = destination_es.settings.index  # ASSIGN FULL NAME
     destination_jx = jx_elasticsearch.new_instance(config.destination)
 
-    # SETUP QUEUE FOR TRANSFErING RECORDS
+    # SETUP QUEUE FOR TRANSFERING RECORDS
     please_stop = Signal()
     done = Signal()
 
@@ -330,7 +337,7 @@ def main():
         INSERT_BATCH_SIZE = config.insert_size
 
     if config.scan_size:
-        SCAN_BATCH_SIZE = config.insert_size
+        SCAN_BATCH_SIZE = config.scan_size
 
     if config.batch_size:
         Log.error("use 'insert_size' or 'scan_size', not 'batch_size'")
