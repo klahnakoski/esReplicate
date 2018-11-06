@@ -304,7 +304,7 @@ class Index(Features):
         lines = []
         try:
             for r in records:
-                if '_id' in r or 'id' not in r:  # I MAKE THIS MISTAKE SO OFTEN, I NEED A CHECK
+                if '_id' in r or 'value' not in r:  # I MAKE THIS MISTAKE SO OFTEN, I NEED A CHECK
                     Log.error('Expecting {"id":id, "value":document} form.  Not expecting _id')
                 rec = self.encode(r)
                 json_bytes = rec['json']
@@ -514,7 +514,8 @@ HOPELESS = [
     "400 MapperParsingException",
     "400 RoutingMissingException",
     "500 IllegalArgumentException[cannot change DocValues type",
-    "JsonParseException"
+    "JsonParseException",
+    " as object, but found a concrete value"
 ]
 
 known_clusters = {}  # MAP FROM (host, port) PAIR TO CLUSTER INSTANCE
@@ -1214,13 +1215,7 @@ class Alias(Features):
     def search(self, query, timeout=None):
         query = wrap(query)
         try:
-            if self.debug:
-                if len(query.facets.keys()) > 20:
-                    show_query = query.copy()
-                    show_query.facets = {k: "..." for k in query.facets.keys()}
-                else:
-                    show_query = query
-                Log.note("Query {{path}}\n{{query|indent}}", path=self.path + "/_search", query=show_query)
+            self.debug and Log.note("Query {{path}}\n{{query|indent}}", path=self.path + "/_search", query=query)
             return self.cluster.post(
                 self.path + "/_search",
                 data=query,

@@ -18,7 +18,7 @@
 	"destination": {
 		"host": "http://activedata.allizom.org",
 		"port": 9200,
-		"index": "repo20171105_000000",
+		"index": "repo20181105_000000",
 		"type": "revision",
 		"typed": false,
 		"timeout": 300,

@@ -13,9 +13,11 @@ from __future__ import unicode_literals
 
 from datetime import timedelta, datetime
 
+from mo_hg.hg_mozilla_org import DEFAULT_LOCALE
+
 import jx_elasticsearch
 from jx_python import jx
-from mo_dots import wrap, Null
+from mo_dots import wrap, Null, coalesce
 from mo_files import File
 from mo_future import text_type
 from mo_json import value2json
@@ -302,7 +304,14 @@ def replicate(source, destination, pending_ids, fixes, please_stop):
                     "format": "list"
                 })
 
-                destination.extend([{"id": h._id, "value": fixer(h._source)} for h in result.data])
+                for h in result.data:
+                    real_id = coalesce(h._source.changeset.id12, "") + "-" + h._source.branch.name + "-" + coalesce(h._source.branch.locale, DEFAULT_LOCALE)
+                    if h._id == real_id:
+                        destination.add({"id": h._id, "value": fixer(h._source)})
+                    else:
+                        destination.add({"id": h._id, "value": {}})
+                        destination.add({"id": real_id, "value": fixer(h._source)})
+
         except Exception as e:
             Log.warning("could not replicate batch", cause=e)
 

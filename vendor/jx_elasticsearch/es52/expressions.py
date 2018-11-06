@@ -17,16 +17,17 @@ from jx_base.expressions import Variable, TupleOp, LeavesOp, BinaryOp, OrOp, Scr
     WhenOp, InequalityOp, extend, Literal, NullOp, TrueOp, FalseOp, DivOp, FloorOp, \
     EqOp, NeOp, NotOp, LengthOp, NumberOp, StringOp, CountOp, MultiOp, RegExpOp, CoalesceOp, MissingOp, ExistsOp, \
     PrefixOp, NotLeftOp, InOp, CaseOp, AndOp, \
-    ConcatOp, IsNumberOp, Expression, BasicIndexOfOp, MaxOp, MinOp, BasicEqOp, BooleanOp, IntegerOp, BasicSubstringOp, ZERO, NULL, FirstOp, FALSE, TRUE, SuffixOp, simplified, ONE, BasicStartsWithOp, BasicMultiOp, UnionOp, merge_types
-from jx_elasticsearch.es52.util import es_not, es_script, es_or, es_and, es_missing
-from mo_dots import coalesce, wrap, Null, set_default, literal_field
+    ConcatOp, IsNumberOp, Expression, BasicIndexOfOp, MaxOp, MinOp, BasicEqOp, BooleanOp, IntegerOp, BasicSubstringOp, ZERO, NULL, FirstOp, FALSE, TRUE, SuffixOp, simplified, ONE, BasicStartsWithOp, BasicMultiOp, UnionOp, merge_types, EsNestedOp
+from jx_elasticsearch.es52.util import es_not, es_script, es_or, es_and, es_missing, pull_functions
+from jx_python.jx import first
+from mo_dots import coalesce, wrap, Null, set_default, literal_field, Data
 from mo_future import text_type
-from mo_json import NUMBER, STRING, BOOLEAN, OBJECT, INTEGER, IS_NULL
+from mo_json import NUMBER, STRING, BOOLEAN, OBJECT, INTEGER, IS_NULL, python_type_to_json_type, NESTED
 from mo_logs import Log, suppress_exception
 from mo_logs.strings import expand_template, quote
 from mo_math import MAX, OR
 from mo_times import Date
-from pyLibrary.convert import string2regexp
+from pyLibrary.convert import string2regexp, value2boolean
 
 NUMBER_TO_STRING = """
 Optional.of({{expr}}).map(
@@ -358,8 +359,10 @@ def to_esfilter(self, schema):
 
 @extend(TupleOp)
 def to_es_script(self, schema, not_null=False, boolean=False, many=True):
-    terms = [FirstOp("first", t).partial_eval().to_es_script(schema) for t in self.terms]
-    expr = 'new Object[]{'+','.join(t.expr for t in terms)+'}'
+    expr = 'new Object[]{' + ','.join(
+        FirstOp("first", t).partial_eval().to_es_script(schema).script(schema)
+        for t in self.terms
+    ) + '}'
     return EsScript(
         type=OBJECT,
         expr=expr,
@@ -404,7 +407,7 @@ def to_esfilter(self, schema):
         if not cols:
             lhs = self.lhs.var  # HAPPENS DURING DEBUGGING, AND MAYBE IN REAL LIFE TOO
         elif len(cols) == 1:
-            lhs = schema.leaves(self.lhs.var)[0].es_column
+            lhs = first(cols).es_column
         else:
             Log.error("operator {{op|quote}} does not work on objects", op=self.op)
         return {"range": {lhs: {self.op: self.rhs.value}}}
@@ -493,17 +496,32 @@ def to_esfilter(self, schema):
         rhs = self.rhs.value
         lhs = self.lhs.var
         cols = schema.leaves(lhs)
-        if cols:
-            lhs = cols[0].es_column
 
         if isinstance(rhs, list):
             if len(rhs) == 1:
-                return {"term": {lhs: rhs[0]}}
+                rhs = rhs[0]
             else:
-                return {"terms": {lhs: rhs}}
-        else:
-            return {"term": {lhs: rhs}}
+                types = Data()  # MAP JSON TYPE TO LIST OF LITERALS
+                for r in rhs:
+                    types[python_type_to_json_type[rhs.__class__]] += [r]
+                if len(types) == 1:
+                    jx_type, values = first(types.items())
+                    for c in cols:
+                        if jx_type == c.jx_type:
+                            return {"terms": {c.es_column: values}}
+                    return FALSE.to_esfilter(schema)
+                else:
+                    return OrOp("or", [
+                        EqOp("in", [self.lhs, values])
+                        for t, values in types.items()
+                    ]).partial_eval().to_esfilter(schema)
 
+        for c in cols:
+            if c.jx_type == BOOLEAN:
+                rhs = pull_functions[c.jx_type](rhs)
+            if python_type_to_json_type[rhs.__class__] == c.jx_type:
+                return {"term": {c.es_column: rhs}}
+        return FALSE.to_esfilter(schema)
     else:
         return CaseOp("case", [
             WhenOp("when", self.lhs.missing(), **{"then": self.rhs.missing()}),
@@ -514,8 +532,9 @@ def to_esfilter(self, schema):
 
 @extend(BasicEqOp)
 def to_es_script(self, schema, not_null=False, boolean=False, many=True):
+    simple_rhs = self.rhs.partial_eval()
     lhs = self.lhs.partial_eval().to_es_script(schema)
-    rhs = self.rhs.partial_eval().to_es_script(schema)
+    rhs = simple_rhs.to_es_script(schema)
 
     if lhs.many:
         if rhs.many:
@@ -524,7 +543,15 @@ def to_es_script(self, schema, not_null=False, boolean=False, many=True):
                 EsScript(type=BOOLEAN, expr="(" + rhs.expr + ").containsAll(" + lhs.expr + ")", frum=self)
             ]).to_es_script(schema)
         else:
-            return EsScript(type=BOOLEAN, expr="(" + lhs.expr + ").contains(" + rhs.expr + ")",frum=self)
+            if lhs.type == BOOLEAN:
+                if isinstance(simple_rhs, Literal) and simple_rhs.value in ('F', False):
+                    return EsScript(type=BOOLEAN, expr="!" + lhs.expr, frum=self)
+                elif isinstance(simple_rhs, Literal) and simple_rhs.value in ('T', True):
+                    return EsScript(type=BOOLEAN, expr=lhs.expr, frum=self)
+                else:
+                    return EsScript(type=BOOLEAN, expr="(" + lhs.expr + ")==(" + rhs.expr + ")", frum=self)
+            else:
+                return EsScript(type=BOOLEAN, expr="(" + lhs.expr + ").contains(" + rhs.expr + ")",frum=self)
     elif rhs.many:
         return EsScript(
             type=BOOLEAN,
@@ -532,11 +559,15 @@ def to_es_script(self, schema, not_null=False, boolean=False, many=True):
             frum=self
         )
     else:
-        return EsScript(
-            type=BOOLEAN,
-            expr="(" + lhs.expr + "==" + rhs.expr + ")",
-            frum=self
-        )
+        if lhs.type == BOOLEAN:
+            if isinstance(simple_rhs, Literal) and simple_rhs.value in ('F', False):
+                return EsScript(type=BOOLEAN, expr="!" + lhs.expr, frum=self)
+            elif isinstance(simple_rhs, Literal) and simple_rhs.value in ('T', True):
+                return EsScript(type=BOOLEAN, expr=lhs.expr, frum=self)
+            else:
+                return EsScript(type=BOOLEAN, expr="(" + lhs.expr + ")==(" + rhs.expr + ")", frum=self)
+        else:
+            return EsScript(type=BOOLEAN, expr="(" + lhs.expr + "==" + rhs.expr + ")", frum=self)
 
 
 @extend(BasicEqOp)
@@ -545,7 +576,7 @@ def to_esfilter(self, schema):
         lhs = self.lhs.var
         cols = schema.leaves(lhs)
         if cols:
-            lhs = cols[0].es_column
+            lhs = first(cols).es_column
         rhs = self.rhs.value
         if isinstance(rhs, list):
             if len(rhs) == 1:
@@ -562,7 +593,7 @@ def to_esfilter(self, schema):
 def to_es_script(self, schema, not_null=False, boolean=False, many=True):
     op, identity = _painless_operators[self.op]
     if len(self.terms) == 0:
-        return identity
+        return Literal("", identity).to_es_script(schema)
     elif len(self.terms) == 1:
         return self.terms[0].to_esscript()
     else:
@@ -580,17 +611,14 @@ def to_es_script(self, schema, not_null=False, boolean=False, many=True):
             return EsScript(type=BOOLEAN, expr="false", frum=self)
         else:
             columns = schema.leaves(self.expr.var)
-            if len(columns) == 1:
-                return EsScript(type=BOOLEAN, expr="doc[" + quote(columns[0].es_column) + "].empty", frum=self)
-            else:
-                return AndOp("and", [
-                    EsScript(
-                        type=BOOLEAN,
-                        expr="doc[" + quote(c.es_column) + "].empty",
-                        frum=self
-                    )
-                    for c in columns
-                ]).partial_eval().to_es_script(schema)
+            return AndOp("and", [
+                EsScript(
+                    type=BOOLEAN,
+                    expr="doc[" + quote(c.es_column) + "].empty",
+                    frum=self
+                )
+                for c in columns
+            ]).partial_eval().to_es_script(schema)
     elif isinstance(self.expr, Literal):
         return self.expr.missing().to_es_script(schema)
     else:
@@ -604,7 +632,7 @@ def to_esfilter(self, schema):
         if not cols:
             return {"match_all": {}}
         elif len(cols) == 1:
-            return es_missing(cols[0].es_column)
+            return es_missing(first(cols).es_column)
         else:
             return es_and([
                 es_missing(c.es_column) for c in cols
@@ -687,11 +715,15 @@ def to_es_script(self, schema, not_null=False, boolean=False, many=True):
 @extend(NotOp)
 def to_esfilter(self, schema):
     if isinstance(self.term, MissingOp) and isinstance(self.term.expr, Variable):
+        # PREVENT RECURSIVE LOOP
         v = self.term.expr.var
-        cols = schema.leaves(v)
-        if cols:
-            v = cols[0].es_column
-        return {"exists": {"field": v}}
+        cols = schema.values(v, (OBJECT, NESTED))
+        if len(cols) == 0:
+            return MATCH_NONE
+        elif len(cols) == 1:
+            return {"exists": {"field": first(cols).es_column}}
+        else:
+            return es_and([{"exists": {"field": c.es_column}} for c in cols])
     else:
         operand = self.term.to_esfilter(schema)
         return es_not(operand)
@@ -764,6 +796,8 @@ def to_es_script(self, schema, not_null=False, boolean=False, many=True):
 def to_es_script(self, schema, not_null=False, boolean=False, many=True):
     if isinstance(self.term, Variable):
         columns = schema.values(self.term.var)
+        if len(columns) == 0:
+            return null_script
         if len(columns) == 1:
             return self.term.to_es_script(schema, many=False)
 
@@ -907,12 +941,16 @@ def to_es_script(self, schema, not_null=False, boolean=False, many=True):
             frum=self
         )
 
+
+count_template = "long count=0; for(v in {{expr}}) if (v!=null) count+=1; return count;"
+
+
 @extend(CountOp)
 def to_es_script(self, schema, not_null=False, boolean=False, many=True):
     return EsScript(
         miss=FALSE,
         type=INTEGER,
-        expr="+".join("((" + t.missing().partial_eval().to_es_script(schema).expr + ") ? 0 : 1)" for t in self.terms),
+        expr=expand_template(count_template, {"expr": self.terms.partial_eval().to_es_script(schema).expr}),
         frum=self
     )
 
@@ -991,7 +1029,7 @@ def to_esfilter(self, schema):
         if len(cols) == 0:
             return MATCH_NONE
         elif len(cols) == 1:
-            return {"regexp": {cols[0].es_column: self.pattern.value}}
+            return {"regexp": {first(cols).es_column: self.pattern.value}}
         else:
             Log.error("regex on not supported ")
     else:
@@ -1007,7 +1045,7 @@ def to_es_script(self, schema, not_null=False, boolean=False, many=True):
         return CoalesceOp("coalesce", [StringOp("string", t).partial_eval() for t in value.frum.terms]).to_es_script(schema)
 
     if value.miss is TRUE or value.type is IS_NULL:
-        return null_script
+        return empty_string_script
     elif value.type == BOOLEAN:
         return EsScript(
             miss=self.term.missing().partial_eval(),
@@ -1046,6 +1084,7 @@ def to_es_script(self, schema, not_null=False, boolean=False, many=True):
 true_script = EsScript(type=BOOLEAN, expr="true", frum=TRUE)
 false_script = EsScript(type=BOOLEAN, expr="false", frum=FALSE)
 null_script = EsScript(miss=TRUE, type=IS_NULL, expr="null", frum=NULL)
+empty_string_script = EsScript(miss=TRUE, type=STRING, expr='""', frum=NULL)
 
 
 @extend(TrueOp)
@@ -1058,9 +1097,23 @@ def to_esfilter(self, schema):
     return {"match_all": {}}
 
 
+@extend(EsNestedOp)
+def to_esfilter(self, schema):
+    if self.path.var == '.':
+        return {"query": self.query.to_esfilter(schema)}
+    else:
+        return {"nested": {
+            "path": self.path.var,
+            "query": self.query.to_esfilter(schema)
+        }}
+
+
 @extend(BasicStartsWithOp)
 def to_es_script(self, schema, not_null=False, boolean=False, many=True):
     expr = FirstOp("first", self.value).partial_eval().to_es_script(schema)
+    if expr is empty_string_script:
+        return false_script
+
     prefix = self.prefix.to_es_script(schema).partial_eval()
     return EsScript(
         miss=FALSE,
@@ -1078,15 +1131,22 @@ def to_esfilter(self, schema):
         var = schema.leaves(self.value.var)[0].es_column
         return {"prefix": {var: self.prefix.value}}
     else:
-        return ScriptOp("script", self.to_es_script(schema).script(schema)).to_esfilter(schema)
+        output = self.to_es_script(schema)
+        if output is false_script:
+            return MATCH_NONE
+        return ScriptOp("script", output.script(schema)).to_esfilter(schema)
 
 
 @extend(PrefixOp)
 def to_esfilter(self, schema):
-    if not self.expr:
+    if isinstance(self.prefix, Literal) and not self.prefix.value:
+        return {"match_all": {}}
+    elif self.expr is NULL:
+        return es_not({"match_all": {}})
+    elif not self.expr:
         return {"match_all": {}}
     elif isinstance(self.expr, Variable) and isinstance(self.prefix, Literal):
-        var = schema.leaves(self.expr.var)[0].es_column
+        var = first(schema.leaves(self.expr.var)).es_column
         return {"prefix": {var: self.prefix.value}}
     else:
         return ScriptOp("script",  self.to_es_script(schema).script(schema)).to_esfilter(schema)
@@ -1094,9 +1154,12 @@ def to_esfilter(self, schema):
 @extend(SuffixOp)
 def to_es_script(self, schema, not_null=False, boolean=False, many=True):
     if not self.suffix:
-        return "true"
+        return true_script
     else:
-        return "(" + self.expr.to_es_script(schema) + ").endsWith(" + self.suffix.to_es_script(schema) + ")"
+        return EsScript(
+            miss=OrOp(None, [MissingOp(None, self.expr), MissingOp(None, self.suffix)]).partial_eval(),
+            expr = "(" + self.expr.to_es_script(schema) + ").endsWith(" + self.suffix.to_es_script(schema) + ")"
+        )
 
 
 @extend(SuffixOp)
@@ -1126,9 +1189,21 @@ def to_esfilter(self, schema):
     if isinstance(self.value, Variable):
         var = self.value.var
         cols = schema.leaves(var)
-        if cols:
-            var = cols[0].es_column
-        return {"terms": {var: self.superset.value}}
+        if not cols:
+            Log.error("expecting {{var}} to be a column", var=var)
+        col = first(cols)
+        var = col.es_column
+
+        if col.jx_type == BOOLEAN:
+            if isinstance(self.superset, Literal) and not isinstance(self.superset.value, (list, tuple)):
+                return {"term": {var: value2boolean(self.superset.value)}}
+            else:
+                return {"terms": {var: map(value2boolean, self.superset.value)}}
+        else:
+            if isinstance(self.superset, Literal) and not isinstance(self.superset.value, (list, tuple)):
+                return {"term": {var: self.superset.value}}
+            else:
+                return {"terms": {var: self.superset.value}}
     else:
         return ScriptOp("script",  self.to_es_script(schema).script(schema)).to_esfilter(schema)
 
@@ -1146,7 +1221,7 @@ def to_esfilter(self, schema):
 @extend(Variable)
 def to_es_script(self, schema, not_null=False, boolean=False, many=True):
     if self.var == ".":
-        return "_source"
+        return EsScript(type=OBJECT, expr="_source", frum=self)
     else:
         if self.var == "_id":
             return EsScript(type=STRING, expr='doc["_uid"].value.substring(doc["_uid"].value.indexOf(\'#\')+1)', frum=self)
@@ -1163,7 +1238,7 @@ def to_es_script(self, schema, not_null=False, boolean=False, many=True):
                     type=c.jx_type,
                     expr="doc[" + q + "].values" if c.jx_type != BOOLEAN else "doc[" + q + "].value",
                     frum=frum,
-                    many=True
+                    many=c.jx_type != BOOLEAN
                 ))
             else:
                 acc.append(EsScript(
@@ -1472,10 +1547,41 @@ def split_expression_by_depth(where, schema, output=None, var_to_depth=None):
         all_depths = set(var_to_depth[v.var] for v in vars_)
 
     if len(all_depths) == 1:
-        output[list(all_depths)[0]] += [where]
+        output[first(all_depths)] += [where]
     elif isinstance(where, AndOp):
         for a in where.terms:
             split_expression_by_depth(a, schema, output, var_to_depth)
+    else:
+        Log.error("Can not handle complex where clause")
+
+    return output
+
+
+def split_expression_by_path(where, schema, output=None, var_to_columns=None):
+    """
+    :param where: EXPRESSION TO INSPECT
+    :param schema: THE SCHEMA
+    :param output: THE MAP FROM PATH TO EXPRESSION WE WANT UPDATED
+    :param var_to_columns: MAP FROM EACH VARIABLE NAME TO THE DEPTH
+    :return: output: A MAP FROM PATH TO EXPRESSION
+    """
+    if var_to_columns is None:
+        var_to_columns = {v.var: schema.leaves(v.var) for v in where.vars()}
+        output = wrap({schema.query_path[0]: []})
+        if not var_to_columns:
+            output["\\."] += [where]  # LEGIT EXPRESSIONS OF ZERO VARIABLES
+            return output
+
+    where_vars = where.vars()
+    all_paths = set(c.nested_path[0] for v in where_vars for c in var_to_columns[v.var])
+
+    if len(all_paths) == 0:
+        output["\\."] += [where]
+    elif len(all_paths) == 1:
+        output[literal_field(first(all_paths))] += [where.map({v.var: c.es_column for v in where.vars() for c in var_to_columns[v.var]})]
+    elif isinstance(where, AndOp):
+        for w in where.terms:
+            split_expression_by_path(w, schema, output, var_to_columns)
     else:
         Log.error("Can not handle complex where clause")
 
