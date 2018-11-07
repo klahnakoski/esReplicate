@@ -13,6 +13,7 @@ from __future__ import unicode_literals
 
 from collections import Mapping
 
+from jx_base import first
 from jx_base.dimensions import Dimension
 from jx_base.domains import SimpleSetDomain, DefaultDomain, PARTITION
 from jx_base.expressions import TupleOp, TRUE
@@ -175,7 +176,7 @@ class SetDecoder(AggsDecoder):
         limit = coalesce(self.limit, len(domain.partitions))
 
         if isinstance(value, Variable):
-            es_field = self.query.frum.schema.leaves(value.var)[0].es_column  # ALREADY CHECKED THERE IS ONLY ONE
+            es_field = first(self.query.frum.schema.leaves(value.var)).es_column  # ALREADY CHECKED THERE IS ONLY ONE
             terms = set_default({"terms": {
                 "field": es_field,
                 "size": limit,
@@ -243,7 +244,7 @@ def _range_composer(edge, domain, es_query, to_float, schema):
         missing_filter = None
 
     if isinstance(edge.value, Variable):
-        calc = {"field": schema.leaves(edge.value.var)[0].es_column}
+        calc = {"field": first(schema.leaves(edge.value.var)).es_column}
     else:
         calc = {"script": edge.value.to_es14_script(schema).script(schema)}
 
@@ -459,7 +460,7 @@ class MultivalueDecoder(SetDecoder):
     def append_query(self, es_query, start):
         self.start = start
 
-        es_field = self.query.frum.schema.leaves(self.var)[0].es_column
+        es_field = first(self.query.frum.schema.leaves(self.var)).es_column
         es_query = wrap({"aggs": {
             "_match": set_default({"terms": {
                 "script":  expand_template(LIST_TO_PIPE, {"expr": 'doc[' + quote(es_field) + '].values'})
@@ -629,7 +630,7 @@ class DefaultDecoder(SetDecoder):
             output = wrap({"aggs": {
                 "_match": set_default(
                     {"terms": {
-                        "field": self.schema.leaves(self.edge.value.var)[0].es_column,
+                        "field": first(self.schema.leaves(self.edge.value.var)).es_column,
                         "size": self.domain.limit,
                         "order": self.es_order
                     }},
@@ -700,7 +701,7 @@ class DimFieldListDecoder(SetDecoder):
             nest = wrap({"aggs": {"_match": {
                 "filter": exists.to_es14_filter(self.schema),
                 "aggs": {"_filter": set_default({"terms": {
-                    "field": self.schema.leaves(v.var)[0].es_column,
+                    "field": first(self.schema.leaves(v.var)).es_column,
                     "size": self.domain.limit
                 }}, es_query)}
             }}})

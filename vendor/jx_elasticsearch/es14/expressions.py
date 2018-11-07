@@ -484,7 +484,7 @@ def to_es14_filter(self, schema):
         lhs = self.lhs.var
         cols = schema.leaves(lhs)
         if cols:
-            lhs = cols[0].es_column
+            lhs = first(cols).es_column
 
         if isinstance(rhs, list):
             if len(rhs) == 1:
@@ -535,7 +535,7 @@ def to_es14_filter(self, schema):
         lhs = self.lhs.var
         cols = schema.leaves(lhs)
         if cols:
-            lhs = cols[0].es_column
+            lhs = first(cols).es_column
         rhs = self.rhs.value
         if isinstance(rhs, list):
             if len(rhs) == 1:
@@ -557,7 +557,7 @@ def to_es14_script(self, schema, not_null=False, boolean=False, many=True):
         else:
             columns = schema.leaves(self.expr.var)
             if len(columns) == 1:
-                return EsScript(type=BOOLEAN, expr="doc[" + quote(columns[0].es_column) + "].isEmpty()", frum=self)
+                return EsScript(type=BOOLEAN, expr="doc[" + quote(first(columns).es_column) + "].isEmpty()", frum=self)
             else:
                 return AndOp("and", [
                     EsScript(
@@ -580,7 +580,7 @@ def to_es14_filter(self, schema):
         if not cols:
             return {"match_all": {}}
         elif len(cols) == 1:
-            return es_missing(cols[0].es_column)
+            return es_missing(first(cols).es_column)
         else:
             return es_and([
                 es_missing(c.es_column) for c in cols
@@ -619,7 +619,7 @@ def to_es14_filter(self, schema):
         if len(columns) == 0:
             return {"match_all": {}}
         elif len(columns) == 1:
-            return es_not({"term": {columns[0].es_column: self.rhs.value}})
+            return es_not({"term": {first(columns).es_column: self.rhs.value}})
         else:
             Log.error("column split to multiple, not handled")
     else:
@@ -666,7 +666,7 @@ def to_es14_filter(self, schema):
         v = self.term.expr.var
         cols = schema.leaves(v)
         if cols:
-            v = cols[0].es_column
+            v = first(cols).es_column
         return {"exists": {"field": v}}
     else:
         operand = self.term.to_es14_filter(schema)
@@ -959,7 +959,7 @@ def to_es14_filter(self, schema):
         if len(cols) == 0:
             return MATCH_NONE
         elif len(cols) == 1:
-            return {"regexp": {cols[0].es_column: self.pattern.value}}
+            return {"regexp": {first(cols).es_column: self.pattern.value}}
         else:
             Log.error("regex on not supported ")
     else:
@@ -1032,7 +1032,7 @@ def to_es14_filter(self, schema):
     if not self.expr:
         return {"match_all": {}}
     elif isinstance(self.expr, Variable) and isinstance(self.prefix, Literal):
-        var = schema.leaves(self.expr.var)[0].es_column
+        var = first(schema.leaves(self.expr.var)).es_column
         return {"prefix": {var: self.prefix.value}}
     else:
         return ScriptOp("script",  self.to_es14_script(schema).script(schema)).to_es14_filter(schema)
@@ -1050,7 +1050,7 @@ def to_es14_filter(self, schema):
     if not self.suffix:
         return {"match_all": {}}
     elif isinstance(self.expr, Variable) and isinstance(self.suffix, Literal):
-        var = schema.leaves(self.expr.var)[0].es_column
+        var = first(schema.leaves(self.expr.var)).es_column
         return {"regexp": {var: ".*"+string2regexp(self.suffix.value)}}
     else:
         return ScriptOp("script",  self.to_es14_script(schema).script(schema)).to_es14_filter(schema)
@@ -1073,7 +1073,7 @@ def to_es14_filter(self, schema):
         var = self.value.var
         cols = schema.leaves(var)
         if cols:
-            var = cols[0].es_column
+            var = first(cols).es_column
         return {"terms": {var: self.superset.value}}
     else:
         return ScriptOp("script",  self.to_es14_script(schema).script(schema)).to_es14_filter(schema)
