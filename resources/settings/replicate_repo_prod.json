@@ -32,7 +32,9 @@
 	"constants": {
 		"pyLibrary.env.http.default_headers": {
 			"Referer": "https://wiki.mozilla.org/Auto-tools/Projects/ActiveData"
-		}
+		},
+		"jx_elasticsearch.meta.ENABLE_META_SCAN": false,
+		"pyLibrary.env.http.DEBUG": false
 	},
 	"debug": {
 		"trace": true,

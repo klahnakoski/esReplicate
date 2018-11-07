@@ -299,7 +299,7 @@ def replicate(source, destination, pending_ids, fixes, please_stop):
                 result = source.query({
                     "select": ["_id", {"name": "_source", "value": "."}],
                     "from": config.source.index,
-                    "where": {"in": {"_id": set(docs)}},
+                    "where": {"in": {"_id": list(set(docs))}},
                     "limit": INSERT_BATCH_SIZE,
                     "format": "list"
                 })

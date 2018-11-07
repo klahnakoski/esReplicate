@@ -199,14 +199,12 @@ def es_setop(es, query):
         else:
             Log.error("Do not know what to do")
 
-    with Timer("call to ES", silent=True) as call_timer:
-
     split_wheres = split_expression_by_path(query.where, schema)
     es_query = es_query_proto(query_path, split_select, split_wheres, schema)
     es_query.size = coalesce(query.limit, DEFAULT_LIMIT)
     es_query.sort = jx_sort_to_es_sort(query.sort, schema)
 
-    with Timer("call to ES") as call_timer:
+    with Timer("call to ES", silent=True) as call_timer:
         data = es_post(es, es_query, query.limit)
 
     T = data.hits.hits
