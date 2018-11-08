@@ -304,14 +304,16 @@ def replicate(source, destination, pending_ids, fixes, please_stop):
                     "format": "list"
                 })
 
+                for_insert = []
                 for h in result.data:
                     real_id = coalesce(h._source.changeset.id12, "") + "-" + h._source.branch.name + "-" + coalesce(h._source.branch.locale, DEFAULT_LOCALE)
                     if h._id == real_id:
-                        destination.add({"id": h._id, "value": fixer(h._source)})
+                        for_insert.append({"id": h._id, "value": fixer(h._source)})
                     else:
-                        destination.add({"id": h._id, "value": {}})
-                        destination.add({"id": real_id, "value": fixer(h._source)})
+                        for_insert.append({"id": h._id, "value": {}})
+                        for_insert.append({"id": real_id, "value": fixer(h._source)})
 
+                destination.extend(for_insert)
         except Exception as e:
             Log.warning("could not replicate batch", cause=e)
 

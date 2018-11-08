@@ -11,6 +11,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import unicode_literals
 
+from jx_base import first
 from jx_base.domains import SetDomain
 from jx_base.expressions import TupleOp, NULL
 from jx_base.query import DEFAULT_LIMIT, MAX_LIMIT
