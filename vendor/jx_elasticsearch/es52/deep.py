@@ -5,31 +5,27 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this file,
 # You can obtain one at http:# mozilla.org/MPL/2.0/.
 #
-# Author: Kyle Lahnakoski (kyle@lahnakoski.com)
+# Contact: Kyle Lahnakoski (kyle@lahnakoski.com)
 #
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import unicode_literals
+from __future__ import absolute_import, division, unicode_literals
 
-from jx_base.expressions import NULL
+from jx_base.expressions import LeavesOp, NULL, Variable
+from jx_base.language import is_op
 from jx_base.query import DEFAULT_LIMIT
-from jx_elasticsearch import post as es_post
-from jx_elasticsearch.es52.expressions import split_expression_by_depth, AndOp, Variable, LeavesOp
-from jx_elasticsearch.es52.setop import format_dispatch, get_pull_function, get_pull
-from jx_elasticsearch.es52.util import jx_sort_to_es_sort, es_query_template
-from jx_python.expressions import compile_expression, jx_expression_to_function
-from mo_dots import split_field, FlatList, listwrap, literal_field, coalesce, Data, concat_field, set_default, relative_field, startswith_field, wrap, unwrap
+from jx_elasticsearch.es52.expressions import AndOp, ES52, split_expression_by_depth, MATCH_ALL
+from jx_elasticsearch.es52.set_op import set_formatters, get_pull, get_pull_function
+from jx_elasticsearch.es52.util import es_query_template, jx_sort_to_es_sort
+from jx_python.expressions import jx_expression_to_function
+from mo_dots import Data, FlatList, coalesce, concat_field, is_list as is_list_, listwrap, literal_field, \
+    relative_field, set_default, split_field, startswith_field, unwrap, wrap
 from mo_future import zip_longest
 from mo_json import NESTED
-from mo_json.typed_encoder import untype_path
+from mo_json.typed_encoder import untype_path, untyped
 from mo_logs import Log
 from mo_threads import Thread
 from mo_times.timer import Timer
-from pyLibrary import convert
 
 EXPRESSION_PREFIX = "_expr."
-
-_ = convert
 
 
 def is_deepop(es, query):
@@ -37,7 +33,7 @@ def is_deepop(es, query):
         return False
     if all(s.aggregate not in (None, "none") for s in listwrap(query.select)):
         return False
-    if len(split_field(query.frum.name)) > 1:
+    if len(split_field(query.frum.schema.name)) > 1:
         return True
 
     # ASSUME IT IS NESTED IF WE ARE ASKING FOR NESTED COLUMNS
@@ -62,20 +58,18 @@ def es_deepop(es, query):
     # SPLIT WHERE CLAUSE BY DEPTH
     wheres = split_expression_by_depth(query.where, schema)
     for f, w in zip_longest(es_filters, wheres):
-        script = AndOp("and", w).partial_eval().to_esfilter(schema)
+        script = ES52[AndOp(w)].partial_eval().to_esfilter(schema)
         set_default(f, script)
 
     if not wheres[1]:
         # INCLUDE DOCS WITH NO NESTED DOCS
         more_filter = {
             "bool": {
-                "filter": [AndOp("and", wheres[0]).partial_eval().to_esfilter(schema)],
+                "filter": [AndOp(wheres[0]).partial_eval().to_esfilter(schema)],
                 "must_not": {
                     "nested": {
                         "path": query_path,
-                        "query": {
-                            "match_all": {}
-                        }
+                        "query": MATCH_ALL
                     }
                 }
             }
@@ -85,21 +79,19 @@ def es_deepop(es, query):
 
     es_query.size = coalesce(query.limit, DEFAULT_LIMIT)
 
-    # es_query.sort = jx_sort_to_es_sort(query.sort)
     map_to_es_columns = schema.map_to_es()
-    # {c.name: c.es_column for c in schema.leaves(".")}
     query_for_es = query.map(map_to_es_columns)
     es_query.sort = jx_sort_to_es_sort(query_for_es.sort, schema)
 
     es_query.stored_fields = []
 
-    is_list = isinstance(query.select, list)
+    is_list = is_list_(query.select)
     selects = wrap([unwrap(s.copy()) for s in listwrap(query.select)])
     new_select = FlatList()
 
     put_index = 0
     for select in selects:
-        if isinstance(select.value, LeavesOp) and isinstance(select.value.term, Variable):
+        if is_op(select.value, LeavesOp) and is_op(select.value.term, Variable):
             # IF THERE IS A *, THEN INSERT THE EXTRA COLUMNS
             leaves = schema.leaves(select.value.term.var)
             col_names = set()
@@ -123,7 +115,7 @@ def es_deepop(es, query):
                 if n.name.startswith("..") and n.name.lstrip(".") not in col_names:
                     n.put.name = n.name = n.name.lstrip(".")
                     col_names.add(n.name)
-        elif isinstance(select.value, Variable):
+        elif is_op(select.value, Variable):
             net_columns = schema.leaves(select.value.var)
             if not net_columns:
                 new_select.append({
@@ -139,17 +131,18 @@ def es_deepop(es, query):
                         if n.jx_type == NESTED:
                             continue
                         es_query.stored_fields += [n.es_column]
+                    else:
+                        pull = _untyper(pull)
 
                     # WE MUST FIGURE OUT WHICH NAMESSPACE s.value.var IS USING SO WE CAN EXTRACT THE child
                     for np in n.nested_path:
                         c_name = untype_path(relative_field(n.name, np))
                         if startswith_field(c_name, select.value.var):
+                            # PREFER THE MOST-RELATIVE NAME
                             child = relative_field(c_name, select.value.var)
                             break
                     else:
                         continue
-                        # REMOVED BECAUSE SELECTING INNER PROPERTIES IS NOT ALLOWED
-                        # child = relative_field(untype_path(relative_field(n.name, n.nested_path[0])), s.value.var)
 
                     new_select.append({
                         "name": select.name,
@@ -174,7 +167,7 @@ def es_deepop(es, query):
             pull_name = EXPRESSION_PREFIX + select.name
             map_to_local = MapToLocal(schema)
             pull = jx_expression_to_function(pull_name)
-            post_expressions[pull_name] = compile_expression(expr.map(map_to_local).to_python())
+            post_expressions[pull_name] = jx_expression_to_function(expr.map(map_to_local))
 
             new_select.append({
                 "name": select.name if is_list else ".",
@@ -184,22 +177,22 @@ def es_deepop(es, query):
             })
             put_index += 1
 
+    es_query.stored_fields = sorted(es_query.stored_fields)
+
     # <COMPLICATED> ES needs two calls to get all documents
     more = []
     def get_more(please_stop):
-        more.append(es_post(
-            es,
+        more.append(es.search(
             Data(
                 query=more_filter,
                 stored_fields=es_query.stored_fields
-            ),
-            query.limit
+            )
         ))
     if more_filter:
         need_more = Thread.run("get more", target=get_more)
 
     with Timer("call to ES") as call_timer:
-        data = es_post(es, es_query, query.limit)
+        data = es.search(es_query)
 
     # EACH A HIT IS RETURNED MULTIPLE TIMES FOR EACH INNER HIT, WITH INNER HIT INCLUDED
     def inners():
@@ -216,7 +209,7 @@ def es_deepop(es, query):
     # </COMPLICATED>
 
     try:
-        formatter, groupby_formatter, mime_type = format_dispatch[query.format]
+        formatter, row_formatter, mime_type = set_formatters[query.format]
 
         output = formatter(inners(), new_select, query)
         output.meta.timing.es = call_timer.duration
@@ -247,3 +240,5 @@ class MapToLocal(object):
             return "coalesce(" + (",".join(get_pull(c) for c in cs)) + ")"
 
 
+def _untyper(func):
+    return lambda row: untyped(func(row))
