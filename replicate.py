@@ -13,22 +13,20 @@ from __future__ import unicode_literals
 
 from datetime import timedelta, datetime
 
-from mo_hg.hg_mozilla_org import DEFAULT_LOCALE
-
 import jx_elasticsearch
+import mo_math
+from jx_elasticsearch import elasticsearch
+from jx_elasticsearch.elasticsearch import Cluster
 from jx_python import jx
 from mo_dots import wrap, Null, coalesce
 from mo_files import File
-from mo_future import text_type
-from mo_json import value2json
+from mo_future import text
+from mo_hg.hg_mozilla_org import DEFAULT_LOCALE
+from mo_http import http
 from mo_logs import startup, constants, Log
-from mo_math import Math, MAX
+from mo_math import MAX
 from mo_threads import Queue, Thread, Signal, THREAD_STOP
 from mo_times import Date, Timer
-from pyLibrary.env import elasticsearch, http
-from pyLibrary.env.elasticsearch import Cluster
-
-_ = value2json
 
 # REPLICATION
 #
@@ -55,9 +53,9 @@ def get_last_updated(es):
         })
 
         max_ = results_max.data[0][config.primary_field]
-        if isinstance(max_, unicode):
+        if isinstance(max_, text):
             pass
-        elif Math.is_integer(max_):
+        elif mo_math.is_integer(max_):
             max_ = int(max_)
         return max_
     except Exception as e:
@@ -110,12 +108,12 @@ def get_pending(source, since, pending_bugs, please_stop):
                 })
                 if new_max_value == None:
                     break  # NOTHING LEFT TO UPDATE
-                elif Math.is_integer(new_max_value):
+                elif mo_math.is_integer(new_max_value):
                     since = int(new_max_value) + 1
-                elif Math.is_number(new_max_value):
+                elif mo_math.is_number(new_max_value):
                     since = float(new_max_value) + 0.5
                 else:
-                    since = text_type(new_max_value) + "a"
+                    since = text(new_max_value) + "a"
             else:
                 since = new_max_value
 
@@ -205,7 +203,7 @@ def diff(source, destination, pending, please_stop):
             if min_ + 1 == max_:
                 Log.warning("Scanning had a with field {{value||quote}} problem", value=min_, cause=e)
             else:
-                mid_ = Math.round((min_ + max_) / 2, decimal=0)
+                mid_ = mo_math.round((min_ + max_) / 2, decimal=0)
                 _copy(min_, mid_)
                 _copy(mid_, max_)
 
@@ -249,7 +247,7 @@ def diff(source, destination, pending, please_stop):
 
             if source_count < SCAN_BATCH_SIZE:
                 _copy(min_, max_)
-            elif Math.is_number(min_) and Math.is_number(max_):
+            elif mo_math.is_number(min_) and mo_math.is_number(max_):
                 mid_ = int(round((float(min_) + float(max_)) / 2, 0))
 
                 if mid_ in (min_, max_):
@@ -408,7 +406,7 @@ def main():
 
     Log.note("done all")
     # RECORD LAST UPDATED, IF WE DID NOT CANCEL OUT
-    time_file.write(text_type(current_time.milli))
+    time_file.write(text(current_time.milli))
 
 
 def start():

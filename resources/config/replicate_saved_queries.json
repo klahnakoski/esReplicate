@@ -10,7 +10,7 @@
 		"debug": false
 	},
 	"fix":{
-		"query":"query if isinstance(query, text_type) else value2json(query)"
+		"query":"query if isinstance(query, text) else value2json(query)"
 	},
 	"destination": {
 //		"host": "http://54.149.21.8",
